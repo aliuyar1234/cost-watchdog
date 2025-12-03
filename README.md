@@ -49,7 +49,7 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 
 ## Architektur
 
-![Cost Watchdog Architecture](.docs/watchdog-architecture.png)
+![Cost Watchdog Architecture](./docs/watchdog-architecture.png)
 
 
 
