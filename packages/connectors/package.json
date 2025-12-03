@@ -1,0 +1,38 @@
+{
+  "name": "@cost-watchdog/connectors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./pdf": {
+      "import": "./dist/pdf/index.js",
+      "types": "./dist/pdf/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@cost-watchdog/connector-sdk": "workspace:*",
+    "@cost-watchdog/core": "workspace:*",
+    "pdfjs-dist": "^4.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/xlsx": "^0.0.36",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}

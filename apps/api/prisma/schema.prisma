@@ -1,0 +1,423 @@
+// Cost Watchdog - Prisma Schema
+// Single-Tenant Architecture (One deployment per customer)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ORGANIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Organization {
+  id                     String   @id @default(uuid()) @db.Uuid
+  name                   String
+  legalName              String?  @map("legal_name")
+  registrationNumber     String?  @map("registration_number")
+  taxId                  String?  @map("tax_id")
+  industry               String?
+  employeeCount          Int?     @map("employee_count")
+  parentOrganizationId   String?  @map("parent_organization_id") @db.Uuid
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  parentOrganization Organization? @relation("OrgHierarchy", fields: [parentOrganizationId], references: [id])
+  childOrganizations Organization[] @relation("OrgHierarchy")
+  locations          Location[]
+  costCenters        CostCenter[]
+
+  @@map("organizations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETTINGS (Single row for app configuration)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AppSettings {
+  id        String   @id @default("default")
+  name      String   @default("Cost Watchdog")
+  plan      String   @default("professional") // starter, professional, business, enterprise
+  settings  Json     @default("{}")
+  ssoConfig Json?    @map("sso_config")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USER & RBAC
+// ═══════════════════════════════════════════════════════════════════════════
+
+model User {
+  id                    String    @id @default(uuid()) @db.Uuid
+  email                 String    @unique
+  passwordHash          String?   @map("password_hash")
+  ssoSubject            String?   @map("sso_subject")
+  firstName             String    @map("first_name")
+  lastName              String    @map("last_name")
+  avatarUrl             String?   @map("avatar_url")
+  role                  String    @default("viewer") // admin, manager, analyst, viewer, auditor
+  permissions           Json      @default("[]")
+  allowedLocationIds    String[]  @map("allowed_location_ids") @db.Uuid
+  allowedCostCenterIds  String[]  @map("allowed_cost_center_ids") @db.Uuid
+  isActive              Boolean   @default(true) @map("is_active")
+  lastLoginAt           DateTime? @map("last_login_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOCATION & COST CENTER
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Location {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  name             String
+  code             String?
+  externalId       String?   @map("external_id")
+  address          Json      // Address object
+  coordinates      Json?     // Coordinates object
+  type             String    @default("office") // office, warehouse, production, retail, etc.
+  ownershipType    String    @default("leased") @map("ownership_type") // owned, leased, coworking
+  grossFloorArea   Decimal?  @map("gross_floor_area") @db.Decimal(12, 2)
+  operationalSince DateTime? @map("operational_since")
+  operationalUntil DateTime? @map("operational_until")
+  isActive         Boolean   @default(true) @map("is_active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id])
+  costRecords  CostRecord[]
+
+  @@index([organizationId])
+  @@map("locations")
+}
+
+model CostCenter {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  name               String
+  code               String   @unique
+  description        String?
+  annualBudget       Decimal? @map("annual_budget") @db.Decimal(18, 4)
+  currency           String   @default("EUR")
+  parentCostCenterId String?  @map("parent_cost_center_id") @db.Uuid
+  isActive           Boolean  @default(true) @map("is_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  parentCostCenter CostCenter?  @relation("CostCenterHierarchy", fields: [parentCostCenterId], references: [id])
+  childCostCenters CostCenter[] @relation("CostCenterHierarchy")
+  costRecords      CostRecord[]
+
+  @@index([organizationId])
+  @@map("cost_centers")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUPPLIER
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Supplier {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  shortName       String?  @map("short_name")
+  taxId           String?  @map("tax_id") @unique
+  category        String   @default("other") // energy_electricity, energy_gas, telecom, etc.
+  costTypes       String[] @map("cost_types")
+  address         Json?
+  website         String?
+  iban            String?
+  templateId      String?  @map("template_id")
+  totalSpend      Decimal? @map("total_spend") @db.Decimal(18, 4)
+  recordCount     Int?     @map("record_count")
+  avgMonthlySpend Decimal? @map("avg_monthly_spend") @db.Decimal(18, 4)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  costRecords CostRecord[]
+
+  @@map("suppliers")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOCUMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Document {
+  id                 String    @id @default(uuid()) @db.Uuid
+  filename           String
+  originalFilename   String    @map("original_filename")
+  mimeType           String    @map("mime_type")
+  fileSize           Int       @map("file_size")
+  fileHash           String    @unique @map("file_hash")
+  storagePath        String    @map("storage_path")
+  documentType       String?   @map("document_type") // invoice, credit_note, statement, etc.
+  costTypes          String[]  @map("cost_types")
+  extractionStatus   String    @default("pending") @map("extraction_status") // pending, processing, completed, failed, manual
+  extractedAt        DateTime? @map("extracted_at")
+  extractionAudit    Json?     @map("extraction_audit")
+  verificationStatus String    @default("pending") @map("verification_status") // pending, auto_verified, manually_verified, rejected
+  verifiedAt         DateTime? @map("verified_at")
+  verifiedBy         String?   @map("verified_by") @db.Uuid
+  verificationNotes  String?   @map("verification_notes")
+  uploadedAt         DateTime  @default(now()) @map("uploaded_at")
+  uploadedBy         String    @map("uploaded_by") @db.Uuid
+
+  // Relations
+  costRecords CostRecord[]
+
+  @@index([extractionStatus])
+  @@map("documents")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COST RECORD (Core Entity)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model CostRecord {
+  id                      String    @id @default(uuid()) @db.Uuid
+  locationId              String?   @map("location_id") @db.Uuid
+  costCenterId            String?   @map("cost_center_id") @db.Uuid
+  supplierId              String    @map("supplier_id") @db.Uuid
+  sourceDocumentId        String?   @map("source_document_id") @db.Uuid
+  invoiceNumber           String?   @map("invoice_number")
+  externalId              String?   @map("external_id")
+  periodStart             DateTime  @map("period_start")
+  periodEnd               DateTime  @map("period_end")
+  invoiceDate             DateTime? @map("invoice_date")
+  dueDate                 DateTime? @map("due_date")
+  amount                  Decimal   @db.Decimal(18, 4)
+  currency                String    @default("EUR")
+  amountNet               Decimal?  @map("amount_net") @db.Decimal(18, 4)
+  vatAmount               Decimal?  @map("vat_amount") @db.Decimal(18, 4)
+  vatRate                 Decimal?  @map("vat_rate") @db.Decimal(5, 2)
+  quantity                Decimal?  @db.Decimal(18, 4)
+  unit                    String?
+  pricePerUnit            Decimal?  @map("price_per_unit") @db.Decimal(18, 6)
+  costType                String    @map("cost_type")
+  costCategory            String?   @map("cost_category")
+  meterNumber             String?   @map("meter_number")
+  contractNumber          String?   @map("contract_number")
+  customerNumber          String?   @map("customer_number")
+  sourceLocation          Json?     @map("source_location")
+  confidence              Float     @default(0)
+  dataQuality             String    @default("extracted") @map("data_quality") // extracted, manual, imported
+  extractionMethod        String?   @map("extraction_method") // template, llm, manual, api
+  isVerified              Boolean   @default(false) @map("is_verified")
+  verifiedAt              DateTime? @map("verified_at")
+  verifiedBy              String?   @map("verified_by") @db.Uuid
+  anomalyStatus           String    @default("ok") @map("anomaly_status") // ok, warning, critical, acknowledged
+  anomalyAcknowledgedBy   String?   @map("anomaly_acknowledged_by") @db.Uuid
+  anomalyAcknowledgeReason String?  @map("anomaly_acknowledge_reason")
+  version                 Int       @default(1)
+  previousVersionId       String?   @map("previous_version_id") @db.Uuid
+  correctionReason        String?   @map("correction_reason")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  location       Location?   @relation(fields: [locationId], references: [id])
+  costCenter     CostCenter? @relation(fields: [costCenterId], references: [id])
+  supplier       Supplier    @relation(fields: [supplierId], references: [id])
+  sourceDocument Document?   @relation(fields: [sourceDocumentId], references: [id])
+  anomalies      Anomaly[]
+
+  @@unique([supplierId, invoiceNumber])
+  @@index([periodStart])
+  @@index([costType])
+  @@index([supplierId])
+  @@index([locationId])
+  @@index([anomalyStatus])
+  @@map("cost_records")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ANOMALY & ALERTING
+// ═══════════════════════════════════════════════════════════════════════════
+
+model Anomaly {
+  id                      String    @id @default(uuid()) @db.Uuid
+  costRecordId            String    @map("cost_record_id") @db.Uuid
+  type                    String    // yoy_deviation, mom_deviation, price_per_unit_spike, etc.
+  severity                String    @default("warning") // info, warning, critical
+  message                 String
+  details                 Json      @default("{}")
+  statisticalSignificance Float?    @map("statistical_significance")
+  zScore                  Float?    @map("z_score")
+  status                  String    @default("new") // new, acknowledged, resolved, false_positive
+  acknowledgedAt          DateTime? @map("acknowledged_at")
+  acknowledgedBy          String?   @map("acknowledged_by") @db.Uuid
+  acknowledgeReason       String?   @map("acknowledge_reason")
+  resolvedAt              DateTime? @map("resolved_at")
+  isBackfill              Boolean   @default(false) @map("is_backfill")
+  detectedAt              DateTime  @default(now()) @map("detected_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  costRecord CostRecord @relation(fields: [costRecordId], references: [id])
+  alerts     Alert[]
+
+  @@unique([costRecordId, type])
+  @@index([status, severity])
+  @@map("anomalies")
+}
+
+model Alert {
+  id           String    @id @default(uuid()) @db.Uuid
+  anomalyId    String    @map("anomaly_id") @db.Uuid
+  userId       String?   @map("user_id") @db.Uuid
+  channel      String    // email, slack, teams, webhook, in_app
+  recipient    String
+  subject      String
+  body         String
+  status       String    @default("pending") // pending, sent, failed, clicked
+  sentAt       DateTime? @map("sent_at")
+  clickedAt    DateTime? @map("clicked_at")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  anomaly Anomaly @relation(fields: [anomalyId], references: [id])
+
+  @@unique([anomalyId, channel])
+  @@map("alerts")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUDIT LOG (Immutable)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id") @db.Uuid
+  action      String   // create, update, delete, verify, acknowledge, export, login, logout
+  before      Json?
+  after       Json?
+  changes     Json?
+  reason      String?
+  metadata    Json?
+  performedBy String   @map("performed_by") // User ID or 'system'
+  performedAt DateTime @default(now()) @map("performed_at")
+  requestId   String?  @map("request_id")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+
+  @@index([entityType, entityId])
+  @@index([performedBy])
+  @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OUTBOX EVENT (For Event-Driven Architecture)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model OutboxEvent {
+  id            BigInt    @id @default(autoincrement())
+  aggregateType String    @map("aggregate_type")
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type")
+  payload       Json
+  createdAt     DateTime  @default(now()) @map("created_at")
+  processedAt   DateTime? @map("processed_at")
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
+  errorMessage  String?   @map("error_message")
+
+  @@index([processedAt, nextAttemptAt])
+  @@map("outbox_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AGGREGATE TABLES (For Dashboard Performance)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model CostRecordMonthlyAgg {
+  id            String   @id @default(uuid()) @db.Uuid
+  year          Int
+  month         Int
+  locationId    String?  @map("location_id") @db.Uuid
+  supplierId    String?  @map("supplier_id") @db.Uuid
+  costType      String?  @map("cost_type")
+  amountSum     Decimal  @default(0) @map("amount_sum") @db.Decimal(18, 4)
+  amountNetSum  Decimal? @map("amount_net_sum") @db.Decimal(18, 4)
+  quantitySum   Decimal? @map("quantity_sum") @db.Decimal(18, 4)
+  recordCount   Int      @default(0) @map("record_count")
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+
+  @@unique([year, month, locationId, supplierId, costType])
+  @@index([year])
+  @@map("cost_record_monthly_agg")
+}
+
+model CostSeasonalBaseline {
+  id            String   @id @default(uuid()) @db.Uuid
+  locationId    String?  @map("location_id") @db.Uuid
+  supplierId    String?  @map("supplier_id") @db.Uuid
+  costType      String   @map("cost_type")
+  monthOfYear   Int      @map("month_of_year") // 1-12
+  avgAmount     Decimal  @map("avg_amount") @db.Decimal(18, 4)
+  stdDev        Decimal? @map("std_dev") @db.Decimal(18, 4)
+  medianAmount  Decimal? @map("median_amount") @db.Decimal(18, 4)
+  sampleCount   Int      @map("sample_count")
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+
+  @@unique([locationId, supplierId, costType, monthOfYear])
+  @@index([monthOfYear])
+  @@map("cost_seasonal_baseline")
+}
+
+model AnomalySuppression {
+  id                     String    @id @default(uuid()) @db.Uuid
+  anomalyType            String    @map("anomaly_type")
+  locationId             String?   @map("location_id") @db.Uuid
+  supplierId             String?   @map("supplier_id") @db.Uuid
+  costType               String?   @map("cost_type")
+  minDeviationPercent    Decimal?  @map("min_deviation_percent") @db.Decimal(5, 2)
+  maxDeviationPercent    Decimal?  @map("max_deviation_percent") @db.Decimal(5, 2)
+  reason                 String
+  createdBy              String    @map("created_by") @db.Uuid
+  createdAt              DateTime  @default(now()) @map("created_at")
+  expiresAt              DateTime? @map("expires_at")
+
+  @@index([anomalyType, locationId, supplierId, costType])
+  @@map("anomaly_suppressions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API KEY MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ApiKey {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  scopes      String[]
+  createdById String    @map("created_by_id") @db.Uuid
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([keyHash, isActive])
+  @@map("api_keys")
+}
