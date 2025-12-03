@@ -49,7 +49,8 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 
 ## Architektur
 
-<img width="2752" height="1536" alt="watchdog-architecture" src="https://github.com/user-attachments/assets/6218c731-02b3-432d-ae87-6d5b76128af9" />
+![Cost Watchdog Architecture](./docs/architecture.png)
+
 
 
 ## Tech Stack
