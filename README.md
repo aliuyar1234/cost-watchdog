@@ -276,7 +276,6 @@ pnpm --filter @cost-watchdog/api test anomalies.test.ts
 
 | Dokument | Inhalt |
 |----------|--------|
-| [CLAUDE.md](./CLAUDE.md) | AI Assistant Kontext |
 | [docs/architecture.md](./docs/architecture.md) | Systemarchitektur |
 | [docs/data-model.md](./docs/data-model.md) | Datenmodell & Entities |
 | [docs/anomaly-engine.md](./docs/anomaly-engine.md) | Anomalie-Checks |

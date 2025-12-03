@@ -1,8 +1,8 @@
 # Cost Watchdog – Vollständige Produktspezifikation
 
-> **Version:** 1.0  
-> **Datum:** Dezember 2025  
-> **Autor:** au + Claude Opus 4.5  
+> **Version:** 1.0
+> **Datum:** Dezember 2025
+> **Autor:** Ali Uyar
 > **Zweck:** Technische Spezifikation für Enterprise-Ready SaaS-Produkt
 
 ---
