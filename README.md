@@ -49,43 +49,8 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 
 ## Architektur
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                 │
-│                     Next.js 14 (App Router)                     │
-│                   Tailwind CSS + shadcn/ui                      │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                          BACKEND                                 │
-│                    Fastify + Prisma ORM                         │
-│         JWT Auth │ Rate Limiting │ API Key Scopes               │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-            ┌───────────────────┼───────────────────┐
-            ▼                   ▼                   ▼
-     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-     │ PostgreSQL  │     │    Redis    │     │   MinIO     │
-     │  Database   │     │   + BullMQ  │     │  (S3-API)   │
-     └─────────────┘     └─────────────┘     └─────────────┘
-            │                   │
-            │                   ▼
-            │           ┌─────────────────────────────────┐
-            │           │         WORKERS                  │
-            │           │  Extraction │ Anomaly │ Alert   │
-            │           │  Aggregation │ Outbox Poller    │
-            │           └─────────────────────────────────┘
-            │
-            ▼
-     ┌─────────────────────────────────────────────────────┐
-     │              ANOMALY ENGINE (packages/core)         │
-     │  YoY │ MoM │ Price Spike │ Statistical Outlier     │
-     │  Seasonal │ Budget │ Duplicate │ Missing Period    │
-     └─────────────────────────────────────────────────────┘
-```
+<img width="2752" height="1536" alt="watchdog-architecture" src="https://github.com/user-attachments/assets/6218c731-02b3-432d-ae87-6d5b76128af9" />
 
----
 
 ## Tech Stack
 
