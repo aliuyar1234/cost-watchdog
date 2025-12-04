@@ -2,7 +2,7 @@
  * Auth API
  */
 
-import { fetchApi } from './client.js';
+import { fetchApi } from './client';
 
 export interface LoginRequest {
   email: string;

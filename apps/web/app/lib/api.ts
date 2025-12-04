@@ -16,4 +16,4 @@
  *   └── index.ts      - Re-exports all
  */
 
-export * from './api/index.js';
+export * from './api/index';

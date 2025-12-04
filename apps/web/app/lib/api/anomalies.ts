@@ -2,7 +2,7 @@
  * Anomalies API
  */
 
-import { fetchApi, buildQueryString } from './client.js';
+import { fetchApi, buildQueryString } from './client';
 
 export interface Anomaly {
   id: string;

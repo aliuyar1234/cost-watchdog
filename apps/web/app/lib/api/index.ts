@@ -6,33 +6,33 @@
  */
 
 // Core client utilities
-export { ApiError, fetchApi, buildQueryString, API_URL } from './client.js';
+export { ApiError, fetchApi, buildQueryString, API_URL } from './client';
 
 // Auth API
-export { authApi } from './auth.js';
-export type { LoginRequest, RegisterRequest, AuthResponse, User } from './auth.js';
+export { authApi } from './auth';
+export type { LoginRequest, RegisterRequest, AuthResponse, User } from './auth';
 
 // Documents API
-export { documentsApi } from './documents.js';
-export type { Document, DocumentsResponse } from './documents.js';
+export { documentsApi } from './documents';
+export type { Document, DocumentsResponse } from './documents';
 
 // Anomalies API
-export { anomaliesApi } from './anomalies.js';
-export type { Anomaly, AnomaliesResponse, AnomalyStats } from './anomalies.js';
+export { anomaliesApi } from './anomalies';
+export type { Anomaly, AnomaliesResponse, AnomalyStats } from './anomalies';
 
 // Analytics API
-export { analyticsApi } from './analytics.js';
+export { analyticsApi } from './analytics';
 export type {
   DashboardData,
   TrendDataPoint,
   BreakdownItem,
   ComparisonData,
-} from './analytics.js';
+} from './analytics';
 
 // Exports API
-export { exportsApi } from './exports.js';
-export type { MonthlyReport } from './exports.js';
+export { exportsApi } from './exports';
+export type { MonthlyReport } from './exports';
 
 // Users API
-export { usersApi } from './users.js';
-export type { UserDetails, UsersResponse } from './users.js';
+export { usersApi } from './users';
+export type { UserDetails, UsersResponse } from './users';

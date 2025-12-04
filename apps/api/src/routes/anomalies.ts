@@ -71,8 +71,8 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
       const user = request.user!;
 
       const query = request.query as AnomalyQuery;
-      const limit = Math.min(query.limit ?? 20, MAX_LIMIT);
-      const offset = query.offset ?? 0;
+      const limit = Math.min(Number(query.limit) || 20, MAX_LIMIT);
+      const offset = Number(query.offset) || 0;
 
       const where: Record<string, unknown> = {};
       if (query.status) where['status'] = query.status;

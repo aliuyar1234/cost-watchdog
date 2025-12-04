@@ -2,7 +2,7 @@
  * Analytics API
  */
 
-import { fetchApi, buildQueryString } from './client.js';
+import { fetchApi, buildQueryString } from './client';
 
 export interface DashboardData {
   year: number;

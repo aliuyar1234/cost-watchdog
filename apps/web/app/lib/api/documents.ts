@@ -2,7 +2,7 @@
  * Documents API
  */
 
-import { fetchApi, buildQueryString, API_URL, ApiError } from './client.js';
+import { fetchApi, buildQueryString, API_URL, ApiError } from './client';
 
 export interface Document {
   id: string;

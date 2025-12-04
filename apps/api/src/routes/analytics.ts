@@ -138,35 +138,23 @@ export const analyticsRoutes: FastifyPluginAsync = async (fastify) => {
       if (query.locationId) where['locationId'] = query.locationId;
       if (query.supplierId) where['supplierId'] = query.supplierId;
 
-      const data = await prisma.costRecordMonthlyAgg.findMany({
+      // Use groupBy to aggregate all records per year-month
+      const data = await prisma.costRecordMonthlyAgg.groupBy({
+        by: ['year', 'month'],
         where,
+        _sum: { amountSum: true, recordCount: true },
         orderBy: [{ year: 'desc' }, { month: 'desc' }],
         take: months,
       });
 
-      // Group by year-month
-      const monthlyData = new Map<string, { amount: number; count: number }>();
-
-      for (const record of data) {
-        const key = `${record.year}-${String(record.month).padStart(2, '0')}`;
-        const existing = monthlyData.get(key) || { amount: 0, count: 0 };
-        monthlyData.set(key, {
-          amount: existing.amount + Number(record.amountSum),
-          count: existing.count + record.recordCount,
-        });
-      }
-
-      const result = Array.from(monthlyData.entries())
-        .map(([period, d]) => {
-          const parts = period.split('-');
-          return {
-            period,
-            year: parseInt(parts[0] || '0'),
-            month: parseInt(parts[1] || '0'),
-            amount: d.amount,
-            recordCount: d.count,
-          };
-        })
+      const result = data
+        .map((record) => ({
+          period: `${record.year}-${String(record.month).padStart(2, '0')}`,
+          year: record.year,
+          month: record.month,
+          amount: Number(record._sum.amountSum || 0),
+          recordCount: record._sum.recordCount || 0,
+        }))
         .sort((a, b) => a.period.localeCompare(b.period));
 
       return reply.send({ data: result });

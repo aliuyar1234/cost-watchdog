@@ -2,7 +2,7 @@
  * Exports API
  */
 
-import { fetchApi, API_URL } from './client.js';
+import { fetchApi, API_URL } from './client';
 
 export interface MonthlyReport {
   period: { year: number; month: number };
