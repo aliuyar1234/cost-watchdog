@@ -46,6 +46,8 @@ NUL
 .claude/
 
 # Internal documentation (not relevant for end users)
-docs/*.md
 docs/slices/
+docs/tech-leitplanken.md
+docs/product-overview.md
+docs/INFRASTRUCTURE_HARDENING.md
 cost-watchdog-specification.md
