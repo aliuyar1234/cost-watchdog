@@ -33,7 +33,7 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 - **PDF-Extraktion** mit Template-Matching und LLM-Fallback
 
 <p align="center">
-  <img src="./docs/Dashboard.png" alt="Cost Watchdog Dashboard" width="100%">
+![Dashboard Screenshot](docs/Dashboard.png)
 </p>
 
 ---
