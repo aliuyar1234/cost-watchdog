@@ -3,7 +3,8 @@
   <img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="License">
   <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Node.js-20+-339933.svg?logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Tests-98%20passing-success.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-186%20passing-success.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Security-Enterprise%20Ready-green.svg" alt="Security">
 </p>
 
 <h1 align="center">Cost Watchdog</h1>
@@ -273,19 +274,24 @@ pnpm test -- --coverage
 pnpm --filter @cost-watchdog/api test anomalies.test.ts
 ```
 
-**Test-Status:** 98 Tests passing (11 Test-Dateien)
+**Test-Status:** 186 Tests passing (15 Test-Dateien)
 
 ---
 
-## Dokumentation
+## Security
 
-| Dokument | Inhalt |
-|----------|--------|
-| [docs/architecture.md](./docs/architecture.md) | Systemarchitektur |
-| [docs/data-model.md](./docs/data-model.md) | Datenmodell & Entities |
-| [docs/anomaly-engine.md](./docs/anomaly-engine.md) | Anomalie-Checks |
-| [docs/api-design.md](./docs/api-design.md) | API Spezifikation |
-| [docs/tech-leitplanken.md](./docs/tech-leitplanken.md) | Technische Patterns |
+Cost Watchdog ist enterprise-ready mit umfassenden Sicherheitsmaßnahmen:
+
+| Feature | Beschreibung |
+|---------|--------------|
+| **Docker Secrets** | Sensitive Konfiguration via Secrets statt Environment-Variablen |
+| **TLS/HTTPS** | Traefik Reverse Proxy mit Let's Encrypt Zertifikaten |
+| **Rate Limiting** | Schutz gegen Brute-Force und DDoS |
+| **Token Blacklisting** | Sichere Logout-Funktionalität mit Redis |
+| **Input Sanitization** | XSS/HTML-Injection Schutz |
+| **CVE Scanning** | Automatische Schwachstellen-Erkennung in CI/CD |
+| **Non-Root Container** | Container laufen als unprivilegierte User |
+| **HMAC Token Validation** | Sichere Alert-Tracking Links |
 
 ---
 
