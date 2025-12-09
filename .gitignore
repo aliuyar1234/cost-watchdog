@@ -41,4 +41,10 @@ prisma/migrations/**/migration_lock.toml
 # Windows reserved names
 nul
 NUL
+
+# Claude Code
 .claude/
+
+# Internal documentation (not relevant for end users)
+docs/
+cost-watchdog-specification.md
