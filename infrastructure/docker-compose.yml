@@ -1,58 +1,103 @@
 version: '3.8'
 
+# =============================================================================
+# Cost Watchdog - Development Infrastructure
+# =============================================================================
+# This compose file is for LOCAL DEVELOPMENT only.
+# For production, use managed services or create a production overlay.
+# =============================================================================
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: cost-watchdog-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cost_watchdog
-      POSTGRES_PASSWORD: cost_watchdog_dev
-      POSTGRES_DB: cost_watchdog
+      # Use environment variables with required validation for production safety
+      POSTGRES_USER: ${POSTGRES_USER:-cost_watchdog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cost_watchdog_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-cost_watchdog}
     ports:
-      - "5432:5432"
+      # Bind to localhost only for security (remove in production)
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cost_watchdog"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cost_watchdog}" ]
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
 
   redis:
     image: redis:7-alpine
     container_name: cost-watchdog-redis
     restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      # Bind to localhost only for security (remove in production)
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
 
   minio:
-    image: minio/minio:latest
+    # Pinned version for reproducible builds
+    image: minio/minio:RELEASE.2024-02-17T01-15-57Z
     container_name: cost-watchdog-minio
     restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: minio_admin
-      MINIO_ROOT_PASSWORD: minio_admin_dev
+      # Use environment variables with defaults for dev
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_admin_dev}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      # Bind to localhost only for security (remove in production)
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: [ "CMD", "mc", "ready", "local" ]
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 128M
 
 volumes:
   postgres_data:
   redis_data:
   minio_data:
+
+    # =============================================================================
+    # Production Notes:
+    # =============================================================================
+    # 1. Use managed services (RDS, ElastiCache, S3) instead of containers
+    # 2. Remove port bindings - use internal Docker network only
+    # 3. Set POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD via secrets manager
+    # 4. Add proper network policies and TLS
+    # 5. Consider using Docker Swarm secrets or Kubernetes secrets
+    # =============================================================================

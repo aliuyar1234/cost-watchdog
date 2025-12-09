@@ -4,6 +4,7 @@ import type { Decimal } from '@prisma/client/runtime/library';
 import { prisma } from '../lib/db.js';
 import { sendNotFound, sendBadRequest } from '../lib/errors.js';
 import { isValidUUID } from '../lib/validators.js';
+import { sanitizeTextArea } from '../lib/sanitize.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { requireScope } from '../middleware/api-key.js';
 
@@ -207,6 +208,9 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
       }
 
+      // Sanitize resolution input to prevent XSS
+      const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : undefined;
+
       const existing = await prisma.anomaly.findUnique({ where: { id } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
@@ -218,7 +222,7 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
           status: 'acknowledged',
           acknowledgedBy: user.sub,
           acknowledgedAt: new Date(),
-          acknowledgeReason: resolution,
+          acknowledgeReason: sanitizedResolution,
         },
         include: ANOMALY_INCLUDE,
       });
@@ -249,6 +253,9 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
       }
 
+      // Sanitize resolution input to prevent XSS
+      const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : undefined;
+
       const existing = await prisma.anomaly.findUnique({ where: { id } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
@@ -261,7 +268,7 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
           acknowledgedBy: existing.acknowledgedBy ?? user.sub,
           acknowledgedAt: existing.acknowledgedAt ?? new Date(),
           resolvedAt: new Date(),
-          acknowledgeReason: resolution,
+          acknowledgeReason: sanitizedResolution,
         },
         include: ANOMALY_INCLUDE,
       });
@@ -292,6 +299,9 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
       }
 
+      // Sanitize resolution input to prevent XSS
+      const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : 'Marked as false positive';
+
       const existing = await prisma.anomaly.findUnique({ where: { id } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
@@ -303,7 +313,7 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
           status: 'false_positive',
           acknowledgedBy: user.sub,
           acknowledgedAt: new Date(),
-          acknowledgeReason: resolution ?? 'Marked as false positive',
+          acknowledgeReason: sanitizedResolution,
         },
         include: ANOMALY_INCLUDE,
       });
@@ -339,6 +349,9 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
       }
 
+      // Sanitize resolution input to prevent XSS
+      const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : undefined;
+
       const existing = await prisma.anomaly.findUnique({ where: { id } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
@@ -351,8 +364,8 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         updateData['acknowledgedAt'] = existing.acknowledgedAt ?? new Date();
       }
 
-      if (resolution) {
-        updateData['acknowledgeReason'] = resolution;
+      if (sanitizedResolution) {
+        updateData['acknowledgeReason'] = sanitizedResolution;
       }
 
       const anomaly = await prisma.anomaly.update({

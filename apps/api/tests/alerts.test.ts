@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
-import alertRoutes from '../src/routes/alerts.js';
+import alertRoutes, { generateAlertToken } from '../src/routes/alerts.js';
 import authPlugin from '../src/middleware/auth.js';
 import { generateTokenPair } from '../src/lib/auth.js';
 import { prisma } from './setup';
@@ -238,12 +238,13 @@ describe('Alert Routes', () => {
   });
 
   describe('POST /alerts/:id/track-click', () => {
-    it('tracks click without authentication', async () => {
+    it('tracks click with valid HMAC token', async () => {
       const { alert } = await createTestAlert();
+      const token = generateAlertToken(alert.id);
 
       const response = await app.inject({
         method: 'POST',
-        url: `/alerts/${alert.id}/track-click`,
+        url: `/alerts/${alert.id}/track-click?token=${token}`,
       });
 
       expect(response.statusCode).toBe(200);
@@ -255,10 +256,50 @@ describe('Alert Routes', () => {
       expect(updated?.clickedAt).not.toBeNull();
     });
 
-    it('returns 404 for non-existent alert', async () => {
+    it('rejects track-click without token', async () => {
+      const { alert } = await createTestAlert();
+
       const response = await app.inject({
         method: 'POST',
-        url: '/alerts/non-existent-id/track-click',
+        url: `/alerts/${alert.id}/track-click`,
+      });
+
+      expect(response.statusCode).toBe(403);
+      const body = response.json();
+      expect(body.message).toContain('Invalid or missing alert token');
+    });
+
+    it('rejects track-click with invalid token', async () => {
+      const { alert } = await createTestAlert();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/alerts/${alert.id}/track-click?token=invalid-token`,
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('rejects token for different alert id', async () => {
+      const { alert } = await createTestAlert();
+      // Generate token for a different (fake) alert ID
+      const wrongToken = generateAlertToken('different-alert-id');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/alerts/${alert.id}/track-click?token=${wrongToken}`,
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('returns 404 for non-existent alert', async () => {
+      const fakeId = 'non-existent-id';
+      const token = generateAlertToken(fakeId);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/alerts/${fakeId}/track-click?token=${token}`,
       });
 
       expect(response.statusCode).toBe(404);

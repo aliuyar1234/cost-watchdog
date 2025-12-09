@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply, FastifyInstance, preHandlerHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
 import { verifyToken, type AuthPayload } from '../lib/auth.js';
+import { isTokenBlacklisted } from '../lib/redis.js';
 
 /**
  * Extend FastifyRequest to include authenticated user data.
@@ -17,7 +18,7 @@ declare module 'fastify' {
  * @param request - Fastify request object
  * @returns Token string or null if not present
  */
-function extractToken(request: FastifyRequest): string | null {
+export function extractToken(request: FastifyRequest): string | null {
   // Try Authorization header first
   const authHeader = request.headers.authorization;
   if (authHeader) {
@@ -39,6 +40,7 @@ function extractToken(request: FastifyRequest): string | null {
 /**
  * Authentication hook that validates JWT tokens.
  * Attaches user payload to request.user if valid.
+ * Also checks if the token has been blacklisted (e.g., after logout).
  *
  * @param request - Fastify request
  * @param reply - Fastify reply
@@ -53,6 +55,16 @@ export const authenticate: preHandlerHookHandler = async (
     reply.code(401).send({
       error: 'Unauthorized',
       message: 'Missing or invalid authorization',
+    });
+    return;
+  }
+
+  // Check if token has been blacklisted (e.g., after logout)
+  const blacklisted = await isTokenBlacklisted(token);
+  if (blacklisted) {
+    reply.code(401).send({
+      error: 'Unauthorized',
+      message: 'Token has been invalidated',
     });
     return;
   }

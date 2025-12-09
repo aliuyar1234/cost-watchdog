@@ -204,22 +204,25 @@ export const excelConnector: Connector = {
         };
       }
 
-      // Parse Excel file using xlsx library
-      const XLSX = await import('xlsx');
-      const workbook = XLSX.read(input.buffer, { type: 'buffer', cellDates: true });
+      // Parse Excel file using exceljs library (safer alternative to xlsx)
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      // Load directly from buffer - exceljs accepts Buffer
+      await workbook.xlsx.load(input.buffer as unknown as ArrayBuffer);
 
       // Select sheet
-      let sheetName: string;
+      let worksheet: import('exceljs').Worksheet | undefined;
       if (config.sheetName) {
-        sheetName = config.sheetName;
-      } else if (config.sheetIndex !== undefined && workbook.SheetNames[config.sheetIndex]) {
-        sheetName = workbook.SheetNames[config.sheetIndex]!;
+        worksheet = workbook.getWorksheet(config.sheetName);
+      } else if (config.sheetIndex !== undefined) {
+        worksheet = workbook.worksheets[config.sheetIndex];
       } else {
-        sheetName = workbook.SheetNames[0]!;
+        worksheet = workbook.worksheets[0];
       }
 
-      const sheet = workbook.Sheets[sheetName];
-      if (!sheet) {
+      const sheetName = worksheet?.name || 'unknown';
+
+      if (!worksheet) {
         return {
           success: false,
           records: [],
@@ -227,23 +230,40 @@ export const excelConnector: Connector = {
             sourceType: 'excel',
             extractionTimestamp: new Date(),
             confidence: 0,
-            warnings: [`Sheet not found: ${sheetName}`],
+            warnings: [`Sheet not found: ${config.sheetName || config.sheetIndex || 0}`],
           },
           audit: {
             connectorId: this.id,
             connectorVersion: this.version,
             inputHash,
           },
-          error: `Sheet not found: ${sheetName}`,
+          error: `Sheet not found: ${config.sheetName || config.sheetIndex || 0}`,
         };
       }
 
-      // Convert to JSON
-      const jsonData = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        defval: null,
-        raw: false,
-      }) as unknown[][];
+      // Convert worksheet to array of arrays
+      const jsonData: unknown[][] = [];
+      worksheet.eachRow({ includeEmpty: false }, (row, _rowNumber) => {
+        const rowValues: unknown[] = [];
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          // Pad with nulls if there are gaps
+          while (rowValues.length < colNumber - 1) {
+            rowValues.push(null);
+          }
+          // Handle different cell value types
+          let value = cell.value;
+          if (value && typeof value === 'object' && 'result' in value) {
+            // Formula cell - use the result
+            value = value.result;
+          }
+          if (value && typeof value === 'object' && 'richText' in value) {
+            // Rich text - extract plain text
+            value = (value.richText as Array<{ text: string }>).map(t => t.text).join('');
+          }
+          rowValues.push(value);
+        });
+        jsonData.push(rowValues);
+      });
 
       const headerRowIndex = (config.headerRow || 1) - 1;
       const startRowIndex = (config.startRow || 2) - 1;

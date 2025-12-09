@@ -1,0 +1,245 @@
+# =============================================================================
+# Cost Watchdog - Docker Swarm Production Deployment
+# =============================================================================
+# Enterprise-grade deployment using Docker Swarm with:
+# - Docker secrets for sensitive data
+# - Replicated services for high availability
+# - Rolling updates with health checks
+# - Resource constraints and reservations
+#
+# Prerequisites:
+# 1. Initialize swarm: docker swarm init
+# 2. Create secrets (see below)
+# 3. Deploy: VERSION=v1.0.0 docker stack deploy -c docker-compose.swarm.yml cost-watchdog
+# =============================================================================
+
+version: '3.8'
+
+services:
+  api:
+    image: cost-watchdog-api:${VERSION:?VERSION is required}
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Non-sensitive config via environment
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      WEB_URL: ${WEB_URL:?WEB_URL is required}
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+    secrets:
+      - db_url
+      - redis_url
+      - auth_secret
+      - s3_access_key
+      - s3_secret_key
+    # Secrets are mounted as files at /run/secrets/<name>
+    # App reads directly from files via lib/secrets.ts - no env var export needed
+    entrypoint: ["/sbin/tini", "--"]
+    command: ["node", "dist/index.js"]
+    networks:
+      - app-network
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+        labels: "service,env"
+    labels:
+      # Traefik labels for automatic TLS and routing
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:?DOMAIN is required}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
+
+  web:
+    image: cost-watchdog-web:${VERSION:?VERSION is required}
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_URL: http://api:3001
+    networks:
+      - app-network
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`${DOMAIN:?DOMAIN is required}`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
+
+  worker:
+    image: cost-watchdog-api:${VERSION:?VERSION is required}
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+    secrets:
+      - db_url
+      - redis_url
+      - auth_secret
+      - s3_access_key
+      - s3_secret_key
+    # Secrets are mounted as files at /run/secrets/<name>
+    # App reads directly from files via lib/secrets.ts - no env var export needed
+    entrypoint: ["/sbin/tini", "--"]
+    command: ["node", "dist/workers/index.js"]
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const Redis = require('ioredis'); const r = new Redis(process.env.REDIS_URL || require('fs').readFileSync('/run/secrets/redis_url', 'utf8').trim()); r.ping().then(() => { r.quit(); process.exit(0); }).catch(() => process.exit(1));"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  app-network:
+    driver: overlay
+    attachable: true
+  traefik-public:
+    external: true
+
+secrets:
+  db_url:
+    external: true
+  redis_url:
+    external: true
+  auth_secret:
+    external: true
+  s3_access_key:
+    external: true
+  s3_secret_key:
+    external: true
+
+# =============================================================================
+# Setup Instructions:
+# =============================================================================
+# 1. Initialize Docker Swarm:
+#    docker swarm init
+#
+# 2. Create overlay network for Traefik:
+#    docker network create --driver=overlay traefik-public
+#
+# 3. Create secrets:
+#    echo "postgresql://user:pass@host:5432/db" | docker secret create db_url -
+#    echo "redis://host:6379" | docker secret create redis_url -
+#    openssl rand -base64 32 | docker secret create auth_secret -
+#    echo "your-s3-access-key" | docker secret create s3_access_key -
+#    echo "your-s3-secret-key" | docker secret create s3_secret_key -
+#
+# 4. Deploy the stack:
+#    VERSION=v1.0.0 DOMAIN=costwatchdog.com WEB_URL=https://costwatchdog.com \
+#    S3_ENDPOINT=https://s3.amazonaws.com S3_BUCKET=cost-watchdog \
+#    docker stack deploy -c docker-compose.swarm.yml cost-watchdog
+#
+# 5. Check services:
+#    docker stack services cost-watchdog
+#    docker stack ps cost-watchdog
+#
+# 6. View logs:
+#    docker service logs cost-watchdog_api
+#
+# 7. Scale services:
+#    docker service scale cost-watchdog_api=3
+#
+# 8. Update deployment:
+#    VERSION=v1.1.0 docker stack deploy -c docker-compose.swarm.yml cost-watchdog
+# =============================================================================

@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { checkDatabaseHealth, disconnectDatabase } from './lib/db.js';
@@ -15,9 +16,54 @@ import apiKeyRoutes from './routes/api-keys.js';
 import { validateApiKey } from './middleware/api-key.js';
 import { createRateLimitHook, RATE_LIMITS } from './lib/rate-limit.js';
 import { registerOpenApi } from './lib/openapi.js';
+import { secrets } from './lib/secrets.js';
+
+/**
+ * Environment validation for security-critical configuration.
+ * Reads from Docker secrets first, falls back to environment variables.
+ */
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+const COOKIE_SECRET = process.env['COOKIE_SECRET'] || secrets.getAuthSecret();
+
+// Validate cookie secret in production - REQUIRED for session security
+if (IS_PRODUCTION && !COOKIE_SECRET) {
+  throw new Error('FATAL: COOKIE_SECRET or AUTH_SECRET is required in production');
+}
+if (IS_PRODUCTION && COOKIE_SECRET && COOKIE_SECRET.length < 32) {
+  throw new Error('FATAL: COOKIE_SECRET must be at least 32 characters long');
+}
 
 const fastify = Fastify({
   logger: true,
+  // Trust proxy headers when behind a reverse proxy (needed for rate limiting)
+  trustProxy: IS_PRODUCTION,
+});
+
+// Register security headers with helmet
+await fastify.register(helmet, {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: IS_PRODUCTION ? [] : null,
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Required for some API responses
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow CORS
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: IS_PRODUCTION ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+  noSniff: true,
+  xssFilter: true,
+  hidePoweredBy: true,
 });
 
 // Register CORS
@@ -28,7 +74,8 @@ await fastify.register(cors, {
 
 // Register cookie plugin for HttpOnly auth cookies
 await fastify.register(cookie, {
-  secret: process.env['COOKIE_SECRET'] || process.env['AUTH_SECRET'] || 'dev-cookie-secret-32-chars-min',
+  // In development, allow a default secret; in production, require explicit config
+  secret: COOKIE_SECRET || 'dev-cookie-secret-32-chars-min-only-for-local',
   parseOptions: {},
 });
 

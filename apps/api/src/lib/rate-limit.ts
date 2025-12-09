@@ -11,7 +11,11 @@ export interface RateLimitConfig {
   maxRequests: number;
   /** Key prefix for Redis */
   keyPrefix?: string;
+  /** Whether to fail closed (deny) on Redis errors. Default: true in production */
+  failClosed?: boolean;
 }
+
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 
 /**
  * Rate limit result.
@@ -36,7 +40,8 @@ export const RATE_LIMITS = {
 
 /**
  * Check rate limit for a key.
- * Falls back to allowing requests if Redis is unavailable (fail-open).
+ * In production, fails closed (denies requests) when Redis is unavailable for security.
+ * In development, fails open (allows requests) for convenience.
  */
 export async function checkRateLimit(
   key: string,
@@ -44,6 +49,7 @@ export async function checkRateLimit(
 ): Promise<RateLimitResult> {
   const now = Math.floor(Date.now() / 1000);
   const resetAt = new Date((now + config.windowSeconds) * 1000);
+  const failClosed = config.failClosed ?? IS_PRODUCTION;
 
   try {
     const prefix = config.keyPrefix || 'rate_limit';
@@ -78,8 +84,21 @@ export async function checkRateLimit(
       retryAfter: allowed ? undefined : config.windowSeconds,
     };
   } catch (error) {
-    // Log Redis error but allow request (fail-open for availability)
-    console.error('[RateLimit] Redis error, allowing request:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('[RateLimit] Redis error:', error instanceof Error ? error.message : 'Unknown error');
+
+    // Security: Fail closed in production to prevent brute-force attacks during Redis outages
+    if (failClosed) {
+      console.warn('[RateLimit] Failing closed - denying request due to Redis unavailability');
+      return {
+        allowed: false,
+        remaining: 0,
+        resetAt,
+        retryAfter: 60, // Retry after 1 minute
+      };
+    }
+
+    // Development: Fail open for convenience
+    console.warn('[RateLimit] Failing open - allowing request (development mode)');
     return {
       allowed: true,
       remaining: config.maxRequests,
@@ -111,7 +130,7 @@ export function getRateLimitKey(request: FastifyRequest): string {
 
 /**
  * Rate limit hook for Fastify.
- * Fails open if rate limiting encounters an error.
+ * In production, fails closed (denies requests) on errors for security.
  */
 export function createRateLimitHook(config: RateLimitConfig = RATE_LIMITS.default) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
@@ -133,8 +152,15 @@ export function createRateLimitHook(config: RateLimitConfig = RATE_LIMITS.defaul
         });
       }
     } catch (error) {
-      // Log but don't block requests on rate limit errors
-      console.error('[RateLimit] Hook error, allowing request:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('[RateLimit] Hook error:', error instanceof Error ? error.message : 'Unknown error');
+
+      // Security: Fail closed in production
+      if (IS_PRODUCTION) {
+        return reply.status(503).send({
+          error: 'Service Unavailable',
+          message: 'Rate limiting service temporarily unavailable. Please try again.',
+        });
+      }
     }
   };
 }

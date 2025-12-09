@@ -9,21 +9,59 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash, randomUUID } from 'crypto';
 import type { Readable } from 'stream';
+import { secrets } from './secrets.js';
+
+/**
+ * Environment validation for S3/MinIO configuration.
+ * Reads from Docker secrets first, falls back to environment variables.
+ * In production, all credentials MUST be provided.
+ */
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+
+const S3_ENDPOINT = process.env['S3_ENDPOINT'];
+const S3_REGION = process.env['S3_REGION'];
+const S3_ACCESS_KEY = secrets.getS3AccessKey();
+const S3_SECRET_KEY = secrets.getS3SecretKey();
+const S3_BUCKET_ENV = process.env['S3_BUCKET'];
+
+// Validate required credentials in production
+if (IS_PRODUCTION) {
+  if (!S3_ACCESS_KEY || !S3_SECRET_KEY) {
+    throw new Error('FATAL: S3 credentials required in production (via Docker secret or env var)');
+  }
+  if (!S3_ENDPOINT) {
+    throw new Error('FATAL: S3_ENDPOINT is required in production');
+  }
+  if (!S3_BUCKET_ENV) {
+    throw new Error('FATAL: S3_BUCKET is required in production');
+  }
+}
+
+// In development, require explicit credentials via environment variables
+// No hardcoded defaults - developers must configure their own .env file
+if (!IS_PRODUCTION && (!S3_ACCESS_KEY || !S3_SECRET_KEY)) {
+  console.warn(
+    '[S3] WARNING: S3 credentials not set. ' +
+    'Please configure them in your .env file for local development.'
+  );
+}
 
 /**
  * S3/MinIO client configuration.
+ * Credentials read from Docker secrets or environment variables.
  */
 const s3Client = new S3Client({
-  endpoint: process.env['S3_ENDPOINT'] || 'http://localhost:9000',
-  region: process.env['S3_REGION'] || 'eu-central-1',
+  endpoint: S3_ENDPOINT || 'http://localhost:9000',
+  region: S3_REGION || 'eu-central-1',
   credentials: {
-    accessKeyId: process.env['S3_ACCESS_KEY'] || 'minio_admin',
-    secretAccessKey: process.env['S3_SECRET_KEY'] || 'minio_admin_dev',
+    // Read from /run/secrets/ first, fall back to env vars
+    accessKeyId: S3_ACCESS_KEY || '',
+    secretAccessKey: S3_SECRET_KEY || '',
   },
   forcePathStyle: true, // Required for MinIO
 });
 
-const BUCKET = process.env['S3_BUCKET'] || 'cost-watchdog';
+const BUCKET = S3_BUCKET_ENV || 'cost-watchdog';
 
 /**
  * Generate a unique storage path for a document.

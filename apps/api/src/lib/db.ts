@@ -1,4 +1,24 @@
 import { PrismaClient, Prisma } from '@prisma/client';
+import { secrets } from './secrets.js';
+
+/**
+ * Hydrate DATABASE_URL from Docker secrets before Prisma initialization.
+ * Prisma reads DATABASE_URL from process.env, so we must set it first.
+ * This runs at module load time, before PrismaClient is instantiated.
+ */
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+
+if (!process.env['DATABASE_URL']) {
+  const dbUrl = secrets.getDatabaseUrl();
+  if (dbUrl) {
+    process.env['DATABASE_URL'] = dbUrl;
+  } else if (IS_PRODUCTION) {
+    throw new Error(
+      'FATAL: DATABASE_URL not found. ' +
+      'Provide via Docker secret at /run/secrets/db_url or DATABASE_URL env var.'
+    );
+  }
+}
 
 /**
  * Global Prisma client instance.
@@ -11,7 +31,7 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: process.env['NODE_ENV'] === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: IS_PRODUCTION ? ['error'] : ['query', 'error', 'warn'],
   });
 
 if (process.env['NODE_ENV'] !== 'production') {

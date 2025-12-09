@@ -12,7 +12,13 @@ import {
   type RegisterInput,
   type RefreshTokenInput,
 } from '../lib/auth.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, extractToken } from '../middleware/auth.js';
+import { blacklistToken } from '../lib/redis.js';
+
+// Access token TTL in seconds (15 minutes)
+const ACCESS_TOKEN_TTL = 15 * 60;
+// Refresh token TTL in seconds (7 days)
+const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60;
 
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 const COOKIE_OPTIONS = {
@@ -94,18 +100,25 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         });
 
         if (existingUser) {
-          return reply.code(409).send({
-            error: 'Conflict',
-            message: 'User with this email already exists',
+          // Return generic message to prevent user enumeration
+          // Use same timing as successful registration to prevent timing attacks
+          await hashPassword(password); // Consume similar time
+          return reply.code(400).send({
+            error: 'Registration Failed',
+            message: 'Unable to complete registration. Please try again or contact support.',
           });
         }
 
         // Hash password
         const passwordHash = await hashPassword(password);
 
-        // Determine role - first user becomes admin
+        // Security: All users start as viewers
+        // Admin setup must be done via secure channel (environment variable or database seed)
+        // Check for INITIAL_ADMIN_EMAIL environment variable for first admin setup
+        const initialAdminEmail = process.env['INITIAL_ADMIN_EMAIL']?.toLowerCase();
         const userCount = await prisma.user.count();
-        const role = userCount === 0 ? 'admin' : 'viewer';
+        const isInitialAdmin = userCount === 0 && initialAdminEmail && email.toLowerCase() === initialAdminEmail;
+        const role = isInitialAdmin ? 'admin' : 'viewer';
 
         // Create user
         const user = await prisma.user.create({
@@ -377,21 +390,43 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
   /**
    * POST /auth/logout
-   * Logout current user.
+   * Logout current user and invalidate tokens.
    */
   fastify.post(
     '/logout',
     {
       preHandler: [authenticate],
     },
-    async (_request: FastifyRequest, reply: FastifyReply) => {
-      // Clear auth cookies
-      clearAuthCookies(reply);
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        // Blacklist the current access token
+        const accessToken = extractToken(request);
+        if (accessToken) {
+          await blacklistToken(accessToken, ACCESS_TOKEN_TTL);
+        }
 
-      return reply.send({
-        success: true,
-        message: 'Logged out successfully',
-      });
+        // Blacklist the refresh token if present
+        const refreshToken = request.cookies?.['refreshToken'];
+        if (refreshToken) {
+          await blacklistToken(refreshToken, REFRESH_TOKEN_TTL);
+        }
+
+        // Clear auth cookies
+        clearAuthCookies(reply);
+
+        return reply.send({
+          success: true,
+          message: 'Logged out successfully',
+        });
+      } catch (error) {
+        request.log.error(error, 'Logout failed');
+        // Still clear cookies even if blacklisting fails
+        clearAuthCookies(reply);
+        return reply.send({
+          success: true,
+          message: 'Logged out successfully',
+        });
+      }
     }
   );
 }

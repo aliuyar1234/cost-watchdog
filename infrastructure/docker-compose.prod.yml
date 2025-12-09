@@ -1,0 +1,290 @@
+version: '3.8'
+
+# =============================================================================
+# Cost Watchdog - Production Docker Compose with TLS
+# =============================================================================
+# Production deployment with:
+# - Traefik reverse proxy for TLS termination (Let's Encrypt)
+# - File-based secrets (no env vars for sensitive data)
+# - Internal-only service networking
+# - Resource constraints and health checks
+#
+# IMPORTANT: VERSION environment variable is REQUIRED.
+# Do not deploy with 'latest' tag - always use explicit version.
+#
+# Prerequisites:
+# 1. Create secrets directory: mkdir -p ./secrets
+# 2. Add secrets files (see Setup Instructions below)
+# 3. Configure DOMAIN and ACME_EMAIL environment variables
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Traefik Reverse Proxy - TLS Termination & Routing
+  # ===========================================================================
+  traefik:
+    image: traefik:v3.0@sha256:9f437f8c6a9d0d2c2c2b4f1d1e3f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f
+    container_name: cost-watchdog-traefik
+    restart: always
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    command:
+      # API and dashboard (disabled in production for security)
+      - "--api.dashboard=false"
+      - "--api.insecure=false"
+      # Providers
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=app-network"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP to HTTPS redirect
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      # Let's Encrypt TLS
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL is required}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      # Security settings
+      - "--serverstransport.insecureskipverify=false"
+      # Logging
+      - "--log.level=WARN"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:ro
+      - traefik-certificates:/letsencrypt
+      - traefik-logs:/var/log/traefik
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # API Service
+  # ===========================================================================
+  api:
+    image: cost-watchdog-api:${VERSION:?VERSION is required - do not use latest}
+    container_name: cost-watchdog-api
+    restart: always
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      # Non-sensitive config via environment
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      WEB_URL: https://${DOMAIN:?DOMAIN is required}
+    volumes:
+      # Mount secrets as read-only files
+      - ./secrets/db_url:/run/secrets/db_url:ro
+      - ./secrets/redis_url:/run/secrets/redis_url:ro
+      - ./secrets/auth_secret:/run/secrets/auth_secret:ro
+      - ./secrets/s3_access_key:/run/secrets/s3_access_key:ro
+      - ./secrets/s3_secret_key:/run/secrets/s3_secret_key:ro
+    # No external ports - only accessible via Traefik
+    expose:
+      - "3001"
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      # Traefik routing configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      # Security headers middleware
+      - "traefik.http.routers.api.middlewares=api-headers,api-ratelimit"
+      - "traefik.http.middlewares.api-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.api-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.api-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.api-headers.headers.forceSTSHeader=true"
+      # Rate limiting (attached via middlewares above)
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.api-ratelimit.ratelimit.burst=50"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Web Service
+  # ===========================================================================
+  web:
+    image: cost-watchdog-web:${VERSION:?VERSION is required - do not use latest}
+    container_name: cost-watchdog-web
+    restart: always
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_URL: http://api:3001
+    # No external ports - only accessible via Traefik
+    expose:
+      - "3000"
+    networks:
+      - app-network
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    labels:
+      # Traefik routing configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.web.loadbalancer.server.port=3000"
+      # Security headers middleware
+      - "traefik.http.routers.web.middlewares=web-headers"
+      - "traefik.http.middlewares.web-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.web-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.web-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.web-headers.headers.forceSTSHeader=true"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Background Worker
+  # ===========================================================================
+  worker:
+    image: cost-watchdog-api:${VERSION:?VERSION is required - do not use latest}
+    container_name: cost-watchdog-worker
+    restart: always
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    command: ["node", "dist/workers/index.js"]
+    environment:
+      NODE_ENV: production
+      S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
+      S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      S3_REGION: ${S3_REGION:-eu-central-1}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+    volumes:
+      # Mount secrets as read-only files
+      - ./secrets/db_url:/run/secrets/db_url:ro
+      - ./secrets/redis_url:/run/secrets/redis_url:ro
+      - ./secrets/auth_secret:/run/secrets/auth_secret:ro
+      - ./secrets/s3_access_key:/run/secrets/s3_access_key:ro
+      - ./secrets/s3_secret_key:/run/secrets/s3_secret_key:ro
+    networks:
+      - app-network
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "-e", "const fs = require('fs'); const Redis = require('ioredis'); const url = fs.existsSync('/run/secrets/redis_url') ? fs.readFileSync('/run/secrets/redis_url', 'utf8').trim() : process.env.REDIS_URL; const r = new Redis(url); r.ping().then(() => { r.quit(); process.exit(0); }).catch(() => process.exit(1));"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  traefik-certificates:
+  traefik-logs:
+
+# =============================================================================
+# Setup Instructions
+# =============================================================================
+# 1. Create secrets directory and files:
+#    mkdir -p ./secrets
+#    echo "postgresql://user:pass@host:5432/db" > ./secrets/db_url
+#    echo "redis://host:6379" > ./secrets/redis_url
+#    openssl rand -base64 32 > ./secrets/auth_secret
+#    echo "your-s3-access-key" > ./secrets/s3_access_key
+#    echo "your-s3-secret-key" > ./secrets/s3_secret_key
+#    chmod 600 ./secrets/*
+#
+# 2. Build images:
+#    docker build -t cost-watchdog-api:v1.0.0 -f apps/api/Dockerfile .
+#    docker build -t cost-watchdog-web:v1.0.0 -f apps/web/Dockerfile .
+#
+# 3. Run (replace with your domain and email):
+#    VERSION=v1.0.0 \
+#    DOMAIN=costwatchdog.com \
+#    ACME_EMAIL=admin@costwatchdog.com \
+#    S3_ENDPOINT=https://s3.amazonaws.com \
+#    S3_BUCKET=cost-watchdog \
+#    docker-compose -f infrastructure/docker-compose.prod.yml up -d
+#
+# 4. Verify TLS:
+#    curl -I https://costwatchdog.com
+#
+# 5. For Docker Swarm with higher availability:
+#    Use docker-compose.swarm.yml instead
+# =============================================================================

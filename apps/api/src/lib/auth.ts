@@ -1,6 +1,7 @@
 import { hash, verify } from '@node-rs/argon2';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
+import { secrets } from './secrets.js';
 
 /**
  * JWT payload structure for authenticated requests.
@@ -13,13 +14,11 @@ export interface AuthPayload extends JWTPayload {
 }
 
 /**
- * Auth configuration loaded from environment.
+ * Auth configuration loaded from Docker secrets or environment.
  * AUTH_SECRET is REQUIRED - application will crash without it.
+ * Reads from /run/secrets/auth_secret first, falls back to AUTH_SECRET env var.
  */
-const AUTH_SECRET = process.env['AUTH_SECRET'];
-if (!AUTH_SECRET) {
-  throw new Error('FATAL: AUTH_SECRET environment variable is required. Set a secure secret of at least 32 characters.');
-}
+const AUTH_SECRET = secrets.getRequiredAuthSecret();
 if (AUTH_SECRET.length < 32) {
   throw new Error('FATAL: AUTH_SECRET must be at least 32 characters long.');
 }

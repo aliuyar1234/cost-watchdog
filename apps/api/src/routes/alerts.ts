@@ -1,13 +1,58 @@
 import { FastifyPluginAsync } from 'fastify';
 import type { Alert } from '@prisma/client';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { prisma } from '../lib/db.js';
 import { sendNotFound, sendBadRequest } from '../lib/errors.js';
 import { isValidUUID } from '../lib/validators.js';
 import { authenticate } from '../middleware/auth.js';
 import { requireScope } from '../middleware/api-key.js';
+import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
+import { secrets } from '../lib/secrets.js';
 
 // Maximum limit for list queries
 const MAX_LIMIT = 100;
+
+// Secret for HMAC token generation (read from Docker secrets or AUTH_SECRET env)
+// In production, this MUST be set - no fallback to prevent token forgery
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+const ALERT_TOKEN_SECRET = secrets.getAuthSecret();
+
+if (!ALERT_TOKEN_SECRET) {
+  if (IS_PRODUCTION) {
+    throw new Error('FATAL: AUTH_SECRET is required for alert token generation in production');
+  }
+  console.warn('[Alerts] WARNING: AUTH_SECRET not set. Using insecure default for development only.');
+}
+
+// Use the secret or a dev-only fallback (never in production)
+const EFFECTIVE_ALERT_SECRET = ALERT_TOKEN_SECRET || 'dev-secret-for-alerts-NEVER-USE-IN-PROD';
+
+/**
+ * Generate an HMAC token for alert click tracking.
+ * This ensures only legitimate alert recipients can mark alerts as clicked.
+ */
+export function generateAlertToken(alertId: string): string {
+  const hmac = createHmac('sha256', EFFECTIVE_ALERT_SECRET);
+  hmac.update(alertId);
+  return hmac.digest('hex');
+}
+
+/**
+ * Verify an HMAC token for alert click tracking.
+ */
+function verifyAlertToken(alertId: string, token: string): boolean {
+  try {
+    const expectedToken = generateAlertToken(alertId);
+    const tokenBuffer = Buffer.from(token, 'hex');
+    const expectedBuffer = Buffer.from(expectedToken, 'hex');
+    if (tokenBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+    return timingSafeEqual(tokenBuffer, expectedBuffer);
+  } catch {
+    return false;
+  }
+}
 
 interface AlertQuery {
   status?: string;
@@ -19,6 +64,10 @@ interface AlertQuery {
 
 interface AlertIdParams {
   id: string;
+}
+
+interface TrackClickQuery {
+  token?: string;
 }
 
 interface AlertResponse {
@@ -38,10 +87,10 @@ interface AlertResponse {
  * Alert routes
  */
 export const alertRoutes: FastifyPluginAsync = async (fastify) => {
-  // Apply auth and scope check to all routes except track-click (public)
+  // Apply auth and scope check to all routes except track-click (uses HMAC token)
   fastify.addHook('preHandler', async (request, reply) => {
-    // Allow track-click without auth
-    if (request.url.endsWith('/track-click')) {
+    // Allow track-click with HMAC token authentication (not JWT)
+    if (request.url.includes('/track-click')) {
       return;
     }
     // Cast to async function type - Fastify supports async hooks without done callback
@@ -104,17 +153,26 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/stats', async (request, reply) => {
     const user = request.user!;
 
+    // Get user's access restrictions and build filter for alerts via anomaly -> costRecord
+    const restrictions = await getUserRestrictions(user.sub);
+    const accessFilter: Record<string, unknown> = restrictions.hasRestrictions
+      ? { anomaly: { costRecord: buildAccessFilter(restrictions) } }
+      : {};
+
     const [byStatus, byChannel, last24h, last7d] = await Promise.all([
       prisma.alert.groupBy({
         by: ['status'],
+        where: accessFilter,
         _count: true,
       }),
       prisma.alert.groupBy({
         by: ['channel'],
+        where: accessFilter,
         _count: true,
       }),
       prisma.alert.count({
         where: {
+          ...accessFilter,
           createdAt: {
             gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
           },
@@ -122,6 +180,7 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
       }),
       prisma.alert.count({
         where: {
+          ...accessFilter,
           createdAt: {
             gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
           },
@@ -183,14 +242,25 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /alerts/:id/track-click
+   * Requires a valid HMAC token to prevent unauthorized access.
+   * Token should be included in alert emails/notifications.
    */
-  fastify.post<{ Params: AlertIdParams }>(
+  fastify.post<{ Params: AlertIdParams; Querystring: TrackClickQuery }>(
     '/:id/track-click',
     async (request, reply) => {
       const { id } = request.params;
+      const { token } = request.query;
 
       if (!isValidUUID(id)) {
         return sendNotFound(reply, 'Alert');
+      }
+
+      // Require valid HMAC token for authentication
+      if (!token || !verifyAlertToken(id, token)) {
+        return reply.status(403).send({
+          error: 'Forbidden',
+          message: 'Invalid or missing alert token',
+        });
       }
 
       const existing = await prisma.alert.findUnique({ where: { id } });

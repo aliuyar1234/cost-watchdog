@@ -436,10 +436,37 @@ function buildDigestCard(data: TeamsDigestData): AdaptiveCard {
   };
 }
 
+// Allowed Teams webhook host patterns for SSRF protection
+const ALLOWED_TEAMS_HOST_SUFFIXES = ['.webhook.office.com', '.logic.azure.com'];
+
+// Request timeout in milliseconds
+const WEBHOOK_TIMEOUT_MS = 10000;
+
+/**
+ * Validate webhook URL against allowed hosts (SSRF protection)
+ */
+function isAllowedTeamsHost(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === 'https:' &&
+      ALLOWED_TEAMS_HOST_SUFFIXES.some(suffix => parsed.hostname.endsWith(suffix))
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Send a message to Teams via webhook
  */
 async function sendWebhook(webhookUrl: string, card: AdaptiveCard): Promise<TeamsResult> {
+  // Validate webhook URL against allowed hosts (SSRF protection)
+  if (!isAllowedTeamsHost(webhookUrl)) {
+    console.error('[Teams] Rejected webhook URL - not an allowed Teams host:', webhookUrl);
+    return { success: false, error: 'Invalid Teams webhook URL: must be https://*.webhook.office.com or https://*.logic.azure.com' };
+  }
+
   const message: TeamsMessage = {
     type: 'message',
     attachments: [
@@ -451,6 +478,10 @@ async function sendWebhook(webhookUrl: string, card: AdaptiveCard): Promise<Team
     ],
   };
 
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
+
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -458,7 +489,10 @@ async function sendWebhook(webhookUrl: string, card: AdaptiveCard): Promise<Team
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(message),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -469,6 +503,13 @@ async function sendWebhook(webhookUrl: string, card: AdaptiveCard): Promise<Team
     console.log('[Teams] Message sent successfully');
     return { success: true };
   } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[Teams] Request timed out after', WEBHOOK_TIMEOUT_MS, 'ms');
+      return { success: false, error: `Teams webhook timed out after ${WEBHOOK_TIMEOUT_MS}ms` };
+    }
+
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[Teams] Error sending webhook:', errorMessage);
     return { success: false, error: errorMessage };

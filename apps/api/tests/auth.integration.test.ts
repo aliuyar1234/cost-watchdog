@@ -18,6 +18,7 @@ describe('Auth integration', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
   });
 
   it('registers, logs in, and returns /auth/me with valid token', async () => {
@@ -59,7 +60,30 @@ describe('Auth integration', () => {
     expect(body.user.email).toBe('user1@example.com');
   });
 
-  it('first registered user becomes admin', async () => {
+  it('first registered user becomes admin when INITIAL_ADMIN_EMAIL matches', async () => {
+    // Set the INITIAL_ADMIN_EMAIL to match the registering user
+    vi.stubEnv('INITIAL_ADMIN_EMAIL', 'firstadmin@example.com');
+
+    const register = await app.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'firstadmin@example.com',
+        password: 'Str0ngP@ss!',
+        firstName: 'First',
+        lastName: 'Admin',
+      },
+    });
+    expect(register.statusCode).toBe(201);
+
+    const body = register.json<{ user: { role: string } }>();
+    expect(body.user.role).toBe('admin');
+  });
+
+  it('first registered user is viewer when INITIAL_ADMIN_EMAIL not set', async () => {
+    // Ensure INITIAL_ADMIN_EMAIL is not set
+    vi.stubEnv('INITIAL_ADMIN_EMAIL', '');
+
     const register = await app.inject({
       method: 'POST',
       url: '/auth/register',
@@ -73,7 +97,27 @@ describe('Auth integration', () => {
     expect(register.statusCode).toBe(201);
 
     const body = register.json<{ user: { role: string } }>();
-    expect(body.user.role).toBe('admin');
+    expect(body.user.role).toBe('viewer');
+  });
+
+  it('first registered user is viewer when email does not match INITIAL_ADMIN_EMAIL', async () => {
+    // Set INITIAL_ADMIN_EMAIL to a different address
+    vi.stubEnv('INITIAL_ADMIN_EMAIL', 'expected-admin@example.com');
+
+    const register = await app.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'different-user@example.com',
+        password: 'Str0ngP@ss!',
+        firstName: 'Different',
+        lastName: 'User',
+      },
+    });
+    expect(register.statusCode).toBe(201);
+
+    const body = register.json<{ user: { role: string } }>();
+    expect(body.user.role).toBe('viewer');
   });
 
   it('rejects invalid credentials', async () => {

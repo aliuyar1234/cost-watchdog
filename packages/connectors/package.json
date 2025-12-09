@@ -26,12 +26,11 @@
     "@anthropic-ai/sdk": "^0.52.0",
     "@cost-watchdog/connector-sdk": "workspace:*",
     "@cost-watchdog/core": "workspace:*",
-    "pdfjs-dist": "^4.0.0",
-    "xlsx": "^0.18.5"
+    "exceljs": "^4.4.0",
+    "pdfjs-dist": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "@types/xlsx": "^0.0.36",
     "typescript": "^5.3.0",
     "vitest": "^1.2.0"
   }
