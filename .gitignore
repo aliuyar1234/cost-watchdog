@@ -46,5 +46,6 @@ NUL
 .claude/
 
 # Internal documentation (not relevant for end users)
-docs/
+docs/*.md
+docs/slices/
 cost-watchdog-specification.md
