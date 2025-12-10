@@ -284,7 +284,7 @@ pnpm --filter @cost-watchdog/api test anomalies.test.ts
 
 Cost Watchdog ist enterprise-ready mit umfassenden Sicherheitsmaßnahmen.
 
-> **[Vollständige Security-Dokumentation](docs/SECURITY.md)** | **[Infrastructure Hardening](docs/INFRASTRUCTURE_HARDENING.md)**
+> **[Vollständige Security-Dokumentation](docs/SECURITY.md)**
 
 ### Authentication & Access Control
 
