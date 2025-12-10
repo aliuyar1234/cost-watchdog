@@ -42,8 +42,9 @@ prisma/migrations/**/migration_lock.toml
 nul
 NUL
 
-# Claude Code
+# AI tooling config
 .claude/
+docs/.claude/
 
 # Internal documentation (not relevant for end users)
 docs/slices/
@@ -51,3 +52,10 @@ docs/tech-leitplanken.md
 docs/product-overview.md
 docs/INFRASTRUCTURE_HARDENING.md
 cost-watchdog-specification.md
+
+# Spec/planning tools
+.specify/
+docs/.specify/
+specs/
+CLAUDE.md
+infrastructure/docs/

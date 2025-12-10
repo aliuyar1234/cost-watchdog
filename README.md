@@ -3,8 +3,10 @@
   <img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="License">
   <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Node.js-20+-339933.svg?logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Tests-186%20passing-success.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-537%20passing-success.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Security-Enterprise%20Ready-green.svg" alt="Security">
+  <img src="https://img.shields.io/badge/GDPR-Compliant-blue.svg" alt="GDPR">
+  <img src="https://img.shields.io/badge/OWASP-Top%2010-orange.svg" alt="OWASP">
 </p>
 
 <h1 align="center">Cost Watchdog</h1>
@@ -274,24 +276,56 @@ pnpm test -- --coverage
 pnpm --filter @cost-watchdog/api test anomalies.test.ts
 ```
 
-**Test-Status:** 186 Tests passing (15 Test-Dateien)
+**Test-Status:** 537 Tests passing (30+ Test-Dateien)
 
 ---
 
 ## Security
 
-Cost Watchdog ist enterprise-ready mit umfassenden Sicherheitsmaßnahmen:
+Cost Watchdog ist enterprise-ready mit umfassenden Sicherheitsmaßnahmen.
+
+> **[Vollständige Security-Dokumentation](docs/SECURITY.md)** | **[Infrastructure Hardening](docs/INFRASTRUCTURE_HARDENING.md)**
+
+### Authentication & Access Control
+
+| Feature | Beschreibung |
+|---------|--------------|
+| **JWT + Refresh Tokens** | Kurzlebige Access Tokens (15min), sichere Token-Rotation |
+| **HttpOnly Cookies** | Tokens sicher gespeichert, kein JavaScript-Zugriff |
+| **Role-Based Access** | 5 Rollen: Admin, Manager, Analyst, Viewer, Auditor |
+| **Account Lockout** | Schutz gegen Brute-Force (5 Versuche → 15min Sperre) |
+| **Strong Passwords** | Min. 12 Zeichen, Komplexitätsregeln, Breach-Detection |
+| **MFA (TOTP)** | 2-Faktor-Authentifizierung mit Google Authenticator etc. |
+
+### API & Data Security
+
+| Feature | Beschreibung |
+|---------|--------------|
+| **API Key Scopes** | Granulare Berechtigungen: read, write, delete, admin |
+| **CSRF Protection** | Double-Submit Cookie Pattern |
+| **Rate Limiting** | Redis-basiert mit Sliding Window |
+| **Field Encryption** | AES-256-GCM für sensible Daten (Rechnungsnummern etc.) |
+| **Secure Logging** | Automatische Redaction von Passwörtern, Tokens, E-Mails |
+| **Input Validation** | Zod Schemas, XSS-Prevention, SQL-Injection-Schutz |
+
+### Compliance & Audit
+
+| Feature | Beschreibung |
+|---------|--------------|
+| **Audit Logging** | Vollständiger Trail aller sicherheitsrelevanten Aktionen |
+| **GDPR Compliance** | Datenexport, Right to Erasure, Anonymisierung |
+| **Data Retention** | Automatische Bereinigung nach konfigurierbaren Zeiträumen |
+| **Session Management** | Aktive Sessions einsehen und widerrufen |
+
+### Infrastructure
 
 | Feature | Beschreibung |
 |---------|--------------|
 | **Docker Secrets** | Sensitive Konfiguration via Secrets statt Environment-Variablen |
 | **TLS/HTTPS** | Traefik Reverse Proxy mit Let's Encrypt Zertifikaten |
-| **Rate Limiting** | Schutz gegen Brute-Force und DDoS |
-| **Token Blacklisting** | Sichere Logout-Funktionalität mit Redis |
-| **Input Sanitization** | XSS/HTML-Injection Schutz |
-| **CVE Scanning** | Automatische Schwachstellen-Erkennung in CI/CD |
 | **Non-Root Container** | Container laufen als unprivilegierte User |
-| **HMAC Token Validation** | Sichere Alert-Tracking Links |
+| **CVE Scanning** | Trivy, TruffleHog, npm audit in CI/CD |
+| **Security Headers** | Helmet.js mit CSP, HSTS, X-Frame-Options etc. |
 
 ---
 

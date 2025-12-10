@@ -6,7 +6,9 @@ import { sendNotFound, sendBadRequest } from '../lib/errors.js';
 import { isValidUUID } from '../lib/validators.js';
 import { sanitizeTextArea } from '../lib/sanitize.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
-import { requireScope } from '../middleware/api-key.js';
+import { requireScope } from '../lib/api-key-scopes.js';
+import { logAuditEvent } from '../lib/audit.js';
+import { getAuditContext } from '../middleware/request-context.js';
 
 // Maximum limit for list queries
 const MAX_LIMIT = 100;
@@ -189,10 +191,11 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /anomalies/:id/acknowledge
    * Requires manager or admin role
+   * API keys need write:anomalies scope
    */
   fastify.post<{ Params: AnomalyIdParams; Body: AcknowledgeBody }>(
     '/:id/acknowledge',
-    { preHandler: requireRole('manager', 'admin') },
+    { preHandler: [requireScope('write:anomalies'), requireRole('manager', 'admin')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -227,6 +230,19 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         include: ANOMALY_INCLUDE,
       });
 
+      // Audit log: anomaly acknowledged
+      const ctx = getAuditContext(request);
+      await logAuditEvent({
+        entityType: 'anomaly',
+        entityId: id,
+        action: 'acknowledge',
+        before: { status: existing.status },
+        after: { status: 'acknowledged' },
+        metadata: { resolution: sanitizedResolution, anomalyType: existing.type, severity: existing.severity },
+        performedBy: user.sub,
+        ...ctx,
+      }).catch((err) => request.log.error(err, 'Failed to log audit event'));
+
       return reply.send(formatAnomaly(anomaly));
     }
   );
@@ -234,10 +250,11 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /anomalies/:id/resolve
    * Requires manager or admin role
+   * API keys need write:anomalies scope
    */
   fastify.post<{ Params: AnomalyIdParams; Body: AcknowledgeBody }>(
     '/:id/resolve',
-    { preHandler: requireRole('manager', 'admin') },
+    { preHandler: [requireScope('write:anomalies'), requireRole('manager', 'admin')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -273,6 +290,19 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         include: ANOMALY_INCLUDE,
       });
 
+      // Audit log: anomaly resolved
+      const ctx = getAuditContext(request);
+      await logAuditEvent({
+        entityType: 'anomaly',
+        entityId: id,
+        action: 'update',
+        before: { status: existing.status },
+        after: { status: 'resolved' },
+        metadata: { resolution: sanitizedResolution, anomalyType: existing.type, severity: existing.severity },
+        performedBy: user.sub,
+        ...ctx,
+      }).catch((err) => request.log.error(err, 'Failed to log audit event'));
+
       return reply.send(formatAnomaly(anomaly));
     }
   );
@@ -280,10 +310,11 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * POST /anomalies/:id/false-positive
    * Requires manager or admin role
+   * API keys need write:anomalies scope
    */
   fastify.post<{ Params: AnomalyIdParams; Body: AcknowledgeBody }>(
     '/:id/false-positive',
-    { preHandler: requireRole('manager', 'admin') },
+    { preHandler: [requireScope('write:anomalies'), requireRole('manager', 'admin')] },
     async (request, reply) => {
       const user = request.user!;
 
@@ -318,6 +349,19 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         include: ANOMALY_INCLUDE,
       });
 
+      // Audit log: anomaly marked as false positive
+      const ctx = getAuditContext(request);
+      await logAuditEvent({
+        entityType: 'anomaly',
+        entityId: id,
+        action: 'update',
+        before: { status: existing.status },
+        after: { status: 'false_positive' },
+        metadata: { resolution: sanitizedResolution, anomalyType: existing.type, severity: existing.severity },
+        performedBy: user.sub,
+        ...ctx,
+      }).catch((err) => request.log.error(err, 'Failed to log audit event'));
+
       return reply.send(formatAnomaly(anomaly));
     }
   );
@@ -325,10 +369,11 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * PATCH /anomalies/:id - Update status
    * Requires manager or admin role
+   * API keys need write:anomalies scope
    */
   fastify.patch<{ Params: AnomalyIdParams; Body: UpdateStatusBody }>(
     '/:id',
-    { preHandler: requireRole('manager', 'admin') },
+    { preHandler: [requireScope('write:anomalies'), requireRole('manager', 'admin')] },
     async (request, reply) => {
       const user = request.user!;
 

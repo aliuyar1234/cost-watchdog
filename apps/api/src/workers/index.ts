@@ -3,6 +3,7 @@ import { createAnomalyWorker } from './anomaly.worker.js';
 import { createAlertWorker } from './alert.worker.js';
 import { createAggregationWorker } from './aggregation.worker.js';
 import { createOutboxPoller } from './outbox-poller.js';
+import { createRetentionWorker } from './retention.worker.js';
 import { closeQueues } from '../lib/queues.js';
 import { closeRedis } from '../lib/redis.js';
 import { disconnectDatabase } from '../lib/db.js';
@@ -35,14 +36,22 @@ async function main(): Promise<void> {
   });
   outboxPoller.start();
 
+  // Start retention worker (scheduled cleanup)
+  const retentionWorker = createRetentionWorker({
+    schedule: process.env['RETENTION_CRON_SCHEDULE'] || '0 3 * * *', // 3 AM daily
+    runOnStartup: process.env['RETENTION_RUN_ON_STARTUP'] === 'true',
+  });
+  await retentionWorker.start();
+
   console.log('[Workers] All workers started');
 
   // Graceful shutdown
   const shutdown = async (signal: string): Promise<void> => {
     console.log(`[Workers] Received ${signal}, shutting down...`);
 
-    // Stop polling
+    // Stop polling and scheduled tasks
     outboxPoller.stop();
+    retentionWorker.stop();
 
     // Close workers
     await Promise.all([

@@ -197,31 +197,51 @@ export class OutboxPoller {
 
   /**
    * Process a batch of events.
+   * Uses transactional claim-and-update to prevent race conditions.
    */
   private async processEvents(): Promise<void> {
-    // Claim events with FOR UPDATE SKIP LOCKED
-    const events = await prisma.$queryRaw<OutboxEventData[]>`
-      WITH claimed AS (
+    const processingTimeout = 5 * 60 * 1000; // 5 minutes timeout for stale claims
+
+    // Atomic claim: SELECT FOR UPDATE SKIP LOCKED + UPDATE processingAt in one transaction
+    const events = await prisma.$transaction(async (tx) => {
+      // Find and lock events
+      const claimed = await tx.$queryRaw<{ id: bigint }[]>`
         SELECT id
         FROM outbox_events
         WHERE processed_at IS NULL
+          AND (processing_at IS NULL OR processing_at < NOW() - INTERVAL '${processingTimeout} milliseconds')
           AND next_attempt_at <= NOW()
           AND attempts < ${this.config.maxAttempts}
         ORDER BY created_at
         LIMIT ${this.config.batchSize}
         FOR UPDATE SKIP LOCKED
-      )
-      SELECT
-        e.id,
-        e.aggregate_type as "aggregateType",
-        e.aggregate_id as "aggregateId",
-        e.event_type as "eventType",
-        e.payload,
-        e.created_at as "createdAt",
-        e.attempts
-      FROM outbox_events e
-      WHERE e.id IN (SELECT id FROM claimed)
-    `;
+      `;
+
+      if (claimed.length === 0) return [];
+
+      const claimedIds = claimed.map((e) => e.id);
+
+      // Atomically mark as processing (claim the events)
+      await tx.$executeRaw`
+        UPDATE outbox_events
+        SET processing_at = NOW()
+        WHERE id = ANY(${claimedIds}::bigint[])
+      `;
+
+      // Return full event data
+      return tx.$queryRaw<OutboxEventData[]>`
+        SELECT
+          id,
+          aggregate_type as "aggregateType",
+          aggregate_id as "aggregateId",
+          event_type as "eventType",
+          payload,
+          created_at as "createdAt",
+          attempts
+        FROM outbox_events
+        WHERE id = ANY(${claimedIds}::bigint[])
+      `;
+    });
 
     if (events.length === 0) return;
 
@@ -256,12 +276,15 @@ export class OutboxPoller {
   }
 
   /**
-   * Mark an event as processed.
+   * Mark an event as processed (clears processingAt claim).
    */
   private async markProcessed(eventId: bigint): Promise<void> {
     await prisma.outboxEvent.update({
       where: { id: eventId },
-      data: { processedAt: new Date() },
+      data: {
+        processedAt: new Date(),
+        processingAt: null,
+      },
     });
   }
 
@@ -285,6 +308,7 @@ export class OutboxPoller {
         data: {
           attempts: newAttempts,
           errorMessage: `Max attempts exceeded. Last error: ${errorMessage}`,
+          processingAt: null, // Clear claim for manual intervention
           // Don't mark as processed so it can be manually retried
         },
       });
@@ -301,6 +325,7 @@ export class OutboxPoller {
         attempts: newAttempts,
         nextAttemptAt,
         errorMessage,
+        processingAt: null, // Clear claim so it can be picked up after delay
       },
     });
 

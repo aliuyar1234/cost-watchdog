@@ -1,6 +1,7 @@
 import { hash, verify } from '@node-rs/argon2';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { secrets } from './secrets.js';
 
 /**
@@ -11,6 +12,7 @@ export interface AuthPayload extends JWTPayload {
   sub: string; // User ID
   email: string;
   role: string;
+  jti?: string; // Session ID for tracking
 }
 
 /**
@@ -159,23 +161,121 @@ export async function verifyRefreshToken(token: string): Promise<string | null> 
 
 /**
  * Generate both access and refresh tokens for a user.
+ * Uses a shared JTI (session ID) for both tokens to enable session tracking.
  *
  * @param user - User data
- * @returns Object containing both tokens
+ * @returns Object containing both tokens and session ID
  */
 export async function generateTokenPair(user: {
   id: string;
   email: string;
   role: string;
-}): Promise<{ accessToken: string; refreshToken: string }> {
+}): Promise<{ accessToken: string; refreshToken: string; sessionId: string }> {
+  // Generate a unique session ID (JTI) shared across access and refresh tokens
+  const sessionId = randomUUID();
+
   const [accessToken, refreshToken] = await Promise.all([
-    generateAccessToken({
+    new SignJWT({
       sub: user.id,
       email: user.email,
       role: user.role,
-    }),
-    generateRefreshToken(user.id),
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setIssuer(JWT_ISSUER)
+      .setAudience(JWT_AUDIENCE)
+      .setExpirationTime(ACCESS_TOKEN_EXPIRY)
+      .setJti(sessionId)
+      .sign(secretKey),
+    new SignJWT({ sub: user.id, type: 'refresh' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setIssuer(JWT_ISSUER)
+      .setAudience(JWT_AUDIENCE)
+      .setExpirationTime(REFRESH_TOKEN_EXPIRY)
+      .setJti(sessionId)
+      .sign(secretKey),
   ]);
 
-  return { accessToken, refreshToken };
+  return { accessToken, refreshToken, sessionId };
+}
+
+/**
+ * Generate token pair with token family ID for rotation support.
+ * The family ID is embedded in the refresh token for rotation tracking.
+ *
+ * @param user - User data
+ * @param familyId - Token family ID for rotation tracking
+ * @returns Object containing both tokens, session ID, and family ID
+ */
+export async function generateTokenPairWithFamily(
+  user: {
+    id: string;
+    email: string;
+    role: string;
+  },
+  familyId: string
+): Promise<{ accessToken: string; refreshToken: string; sessionId: string; familyId: string }> {
+  // Generate a unique session ID (JTI) shared across access and refresh tokens
+  const sessionId = randomUUID();
+
+  const [accessToken, refreshToken] = await Promise.all([
+    new SignJWT({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setIssuer(JWT_ISSUER)
+      .setAudience(JWT_AUDIENCE)
+      .setExpirationTime(ACCESS_TOKEN_EXPIRY)
+      .setJti(sessionId)
+      .sign(secretKey),
+    new SignJWT({
+      sub: user.id,
+      type: 'refresh',
+      fid: familyId, // Token family ID for rotation
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setIssuer(JWT_ISSUER)
+      .setAudience(JWT_AUDIENCE)
+      .setExpirationTime(REFRESH_TOKEN_EXPIRY)
+      .setJti(sessionId)
+      .sign(secretKey),
+  ]);
+
+  return { accessToken, refreshToken, sessionId, familyId };
+}
+
+/**
+ * Verify a refresh token and extract family ID.
+ *
+ * @param token - Refresh token string
+ * @returns User ID and family ID if valid, null otherwise
+ */
+export async function verifyRefreshTokenWithFamily(
+  token: string
+): Promise<{ userId: string; familyId: string } | null> {
+  try {
+    const { payload } = await jwtVerify(token, secretKey, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
+
+    if (payload['type'] !== 'refresh' || !payload.sub) {
+      return null;
+    }
+
+    const familyId = payload['fid'] as string | undefined;
+    if (!familyId) {
+      // Legacy token without family ID - just return userId
+      return { userId: payload.sub, familyId: '' };
+    }
+
+    return { userId: payload.sub, familyId };
+  } catch {
+    return null;
+  }
 }

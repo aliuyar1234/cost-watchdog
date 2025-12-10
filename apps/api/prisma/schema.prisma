@@ -68,11 +68,69 @@ model User {
   allowedLocationIds    String[]  @map("allowed_location_ids") @db.Uuid
   allowedCostCenterIds  String[]  @map("allowed_cost_center_ids") @db.Uuid
   isActive              Boolean   @default(true) @map("is_active")
+  mfaRequired           Boolean   @default(false) @map("mfa_required")
+  deletedAt             DateTime? @map("deleted_at")
   lastLoginAt           DateTime? @map("last_login_at")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
+  // Relations
+  mfaEnrollments                MfaEnrollment[]
+  passwordResetTokens           PasswordResetToken[]
+  uploadedDocuments             Document[]           @relation("DocumentUploadedBy")
+  verifiedDocuments             Document[]           @relation("DocumentVerifiedBy")
+  verifiedCostRecords           CostRecord[]         @relation("CostRecordVerifiedBy")
+  acknowledgedCostRecordAnomalies CostRecord[]       @relation("CostRecordAnomalyAcknowledgedBy")
+  acknowledgedAnomalies         Anomaly[]            @relation("AnomalyAcknowledgedBy")
+  alerts                        Alert[]              @relation("AlertUser")
+  createdAnomalySuppressions    AnomalySuppression[] @relation("AnomalySuppressionCreatedBy")
+  createdApiKeys                ApiKey[]             @relation("ApiKeyCreatedBy")
+
   @@map("users")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PASSWORD RESET TOKEN
+// ═══════════════════════════════════════════════════════════════════════════
+
+model PasswordResetToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MFA ENROLLMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+model MfaEnrollment {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  method            String    @default("totp") // totp, webauthn
+  secretEncrypted   String    @map("secret_encrypted") // Encrypted TOTP secret
+  backupCodesHash   String[]  @map("backup_codes_hash") // Hashed backup codes
+  backupCodesUsed   Int       @default(0) @map("backup_codes_used")
+  verified          Boolean   @default(false)
+  verifiedAt        DateTime? @map("verified_at")
+  lastUsedAt        DateTime? @map("last_used_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, method])
+  @@map("mfa_enrollments")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -180,9 +238,13 @@ model Document {
   uploadedBy         String    @map("uploaded_by") @db.Uuid
 
   // Relations
-  costRecords CostRecord[]
+  costRecords     CostRecord[]
+  uploadedByUser  User   @relation("DocumentUploadedBy", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  verifiedByUser  User?  @relation("DocumentVerifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
 
   @@index([extractionStatus])
+  @@index([uploadedAt(sort: Desc)])
+  @@index([extractionStatus, uploadedAt(sort: Desc)])
   @@map("documents")
 }
 
@@ -232,11 +294,15 @@ model CostRecord {
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  location       Location?   @relation(fields: [locationId], references: [id])
-  costCenter     CostCenter? @relation(fields: [costCenterId], references: [id])
-  supplier       Supplier    @relation(fields: [supplierId], references: [id])
-  sourceDocument Document?   @relation(fields: [sourceDocumentId], references: [id])
-  anomalies      Anomaly[]
+  location                  Location?    @relation(fields: [locationId], references: [id])
+  costCenter                CostCenter?  @relation(fields: [costCenterId], references: [id])
+  supplier                  Supplier     @relation(fields: [supplierId], references: [id])
+  sourceDocument            Document?    @relation(fields: [sourceDocumentId], references: [id])
+  verifiedByUser            User?        @relation("CostRecordVerifiedBy", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  anomalyAcknowledgedByUser User?        @relation("CostRecordAnomalyAcknowledgedBy", fields: [anomalyAcknowledgedBy], references: [id], onDelete: SetNull)
+  previousVersion           CostRecord?  @relation("CostRecordVersionChain", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions              CostRecord[] @relation("CostRecordVersionChain")
+  anomalies                 Anomaly[]
 
   @@unique([supplierId, invoiceNumber])
   @@index([periodStart])
@@ -271,8 +337,9 @@ model Anomaly {
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  costRecord CostRecord @relation(fields: [costRecordId], references: [id])
-  alerts     Alert[]
+  costRecord       CostRecord @relation(fields: [costRecordId], references: [id])
+  acknowledgedByUser User?    @relation("AnomalyAcknowledgedBy", fields: [acknowledgedBy], references: [id], onDelete: SetNull)
+  alerts           Alert[]
 
   @@unique([costRecordId, type])
   @@index([status, severity])
@@ -295,6 +362,7 @@ model Alert {
 
   // Relations
   anomaly Anomaly @relation(fields: [anomalyId], references: [id])
+  user    User?   @relation("AlertUser", fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([anomalyId, channel])
   @@map("alerts")
@@ -319,10 +387,30 @@ model AuditLog {
   requestId   String?  @map("request_id")
   ipAddress   String?  @map("ip_address")
   userAgent   String?  @map("user_agent")
+  anonymized  Boolean  @default(false) // For GDPR deletion - marks if PII has been removed
 
   @@index([entityType, entityId])
   @@index([performedBy])
+  @@index([performedAt])
   @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LOGIN ATTEMPT TRACKING (For Account Lockout)
+// ═══════════════════════════════════════════════════════════════════════════
+
+model LoginAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  ipAddress String   @map("ip_address")
+  userAgent String?  @map("user_agent")
+  success   Boolean
+  failureReason String? @map("failure_reason")
+  attemptedAt DateTime @default(now()) @map("attempted_at")
+
+  @@index([email, attemptedAt])
+  @@index([ipAddress, attemptedAt])
+  @@map("login_attempts")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -336,12 +424,13 @@ model OutboxEvent {
   eventType     String    @map("event_type")
   payload       Json
   createdAt     DateTime  @default(now()) @map("created_at")
+  processingAt  DateTime? @map("processing_at") // Set when claimed by a worker
   processedAt   DateTime? @map("processed_at")
   attempts      Int       @default(0)
   nextAttemptAt DateTime  @default(now()) @map("next_attempt_at")
   errorMessage  String?   @map("error_message")
 
-  @@index([processedAt, nextAttemptAt])
+  @@index([processedAt, processingAt, nextAttemptAt])
   @@map("outbox_events")
 }
 
@@ -397,6 +486,9 @@ model AnomalySuppression {
   createdAt              DateTime  @default(now()) @map("created_at")
   expiresAt              DateTime? @map("expires_at")
 
+  // Relations
+  createdByUser User @relation("AnomalySuppressionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
   @@index([anomalyType, locationId, supplierId, costType])
   @@map("anomaly_suppressions")
 }
@@ -417,6 +509,9 @@ model ApiKey {
   revokedAt   DateTime? @map("revoked_at")
   isActive    Boolean   @default(true) @map("is_active")
   createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  createdBy User @relation("ApiKeyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([keyHash, isActive])
   @@map("api_keys")

@@ -3,6 +3,8 @@ import { randomBytes, createHash } from 'crypto';
 import { prisma } from '../lib/db.js';
 import { sendNotFound, sendBadRequest, sendForbidden } from '../lib/errors.js';
 import { authenticate } from '../middleware/auth.js';
+import { logAuditEvent } from '../lib/audit.js';
+import { getAuditContext } from '../middleware/request-context.js';
 
 interface ApiKeyQuery {
   limit?: number;
@@ -199,6 +201,22 @@ export const apiKeyRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
+      // Audit log: API key created
+      const ctx = getAuditContext(request);
+      await logAuditEvent({
+        entityType: 'api_key',
+        entityId: newApiKey.id,
+        action: 'create',
+        after: {
+          name: newApiKey.name,
+          keyPrefix: newApiKey.keyPrefix,
+          scopes: newApiKey.scopes,
+          expiresAt: newApiKey.expiresAt?.toISOString() ?? null,
+        },
+        performedBy: user.sub,
+        ...ctx,
+      }).catch((err) => request.log.error(err, 'Failed to log audit event'));
+
       const response: ApiKeyWithSecret = {
         ...formatApiKey(newApiKey),
         apiKey: key,
@@ -231,6 +249,19 @@ export const apiKeyRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         data: { isActive: false, revokedAt: new Date() },
       });
+
+      // Audit log: API key revoked
+      const ctx = getAuditContext(request);
+      await logAuditEvent({
+        entityType: 'api_key',
+        entityId: id,
+        action: 'update',
+        before: { isActive: true },
+        after: { isActive: false },
+        metadata: { operation: 'revoke', name: existing.name, keyPrefix: existing.keyPrefix },
+        performedBy: user.sub,
+        ...ctx,
+      }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.status(204).send();
     }

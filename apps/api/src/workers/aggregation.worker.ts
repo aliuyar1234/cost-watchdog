@@ -81,16 +81,16 @@ async function updateAggregation(costRecordId: string): Promise<void> {
 const BATCH_SIZE = 1000;
 
 /**
- * Full rebuild of all aggregations using batch processing
- * to avoid memory issues with large datasets.
+ * Full rebuild of all aggregations using cursor-based pagination
+ * for O(n) performance instead of O(n²) with offset pagination.
  */
 async function rebuildAggregations(): Promise<void> {
-  console.log(`[AggregationWorker] Starting full rebuild with batch processing`);
+  console.log(`[AggregationWorker] Starting full rebuild with cursor-based pagination`);
 
   // Delete existing aggregations
   await prisma.costRecordMonthlyAgg.deleteMany({});
 
-  // Group by dimensions using in-memory aggregation with batch fetching
+  // Group by dimensions using in-memory aggregation with cursor-based fetching
   const aggregations = new Map<string, {
     year: number;
     month: number;
@@ -103,13 +103,14 @@ async function rebuildAggregations(): Promise<void> {
     recordCount: number;
   }>();
 
-  let offset = 0;
+  let lastId: string | null = null;
   let processedCount = 0;
 
-  // Process in batches to avoid memory issues
+  // Process in batches using cursor pagination (O(n) instead of O(n²) with offset)
   while (true) {
     const records = await prisma.costRecord.findMany({
       select: {
+        id: true,
         periodStart: true,
         locationId: true,
         supplierId: true,
@@ -118,7 +119,7 @@ async function rebuildAggregations(): Promise<void> {
         amountNet: true,
         quantity: true,
       },
-      skip: offset,
+      where: lastId ? { id: { gt: lastId } } : undefined,
       take: BATCH_SIZE,
       orderBy: { id: 'asc' },
     });
@@ -154,7 +155,7 @@ async function rebuildAggregations(): Promise<void> {
     }
 
     processedCount += records.length;
-    offset += BATCH_SIZE;
+    lastId = records[records.length - 1].id;
     console.log(`[AggregationWorker] Processed ${processedCount} records...`);
 
     // If we got fewer records than batch size, we're done

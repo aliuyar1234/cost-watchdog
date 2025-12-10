@@ -1,26 +1,29 @@
+/**
+ * Auth Routes
+ *
+ * HTTP layer for authentication endpoints.
+ * Business logic is delegated to AuthService.
+ */
+
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../lib/db.js';
 import {
-  hashPassword,
-  verifyPassword,
-  generateTokenPair,
-  verifyRefreshToken,
   loginSchema,
   registerSchema,
-  refreshTokenSchema,
   type LoginInput,
   type RegisterInput,
   type RefreshTokenInput,
 } from '../lib/auth.js';
 import { authenticate, extractToken } from '../middleware/auth.js';
-import { blacklistToken } from '../lib/redis.js';
+import { getAuditContext } from '../middleware/request-context.js';
+import { authService, type AuthContext } from '../services/auth.service.js';
 
-// Access token TTL in seconds (15 minutes)
-const ACCESS_TOKEN_TTL = 15 * 60;
-// Refresh token TTL in seconds (7 days)
-const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60;
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════════════
 
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: IS_PRODUCTION,
@@ -28,9 +31,10 @@ const COOKIE_OPTIONS = {
   path: '/',
 };
 
-/**
- * Set auth cookies on reply.
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
 function setAuthCookies(
   reply: FastifyReply,
   accessToken: string,
@@ -38,31 +42,35 @@ function setAuthCookies(
 ): void {
   reply.setCookie('accessToken', accessToken, {
     ...COOKIE_OPTIONS,
-    maxAge: 15 * 60, // 15 minutes
+    maxAge: 15 * 60,
   });
   reply.setCookie('refreshToken', refreshToken, {
     ...COOKIE_OPTIONS,
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    maxAge: 7 * 24 * 60 * 60,
   });
 }
 
-/**
- * Clear auth cookies on reply.
- */
 function clearAuthCookies(reply: FastifyReply): void {
   reply.clearCookie('accessToken', COOKIE_OPTIONS);
   reply.clearCookie('refreshToken', COOKIE_OPTIONS);
 }
 
-/**
- * Auth routes plugin.
- * Provides login, register, refresh, and logout endpoints.
- * Single-tenant: No tenant creation, users are created directly.
- */
+function getContext(request: FastifyRequest): AuthContext {
+  const ctx = getAuditContext(request);
+  return {
+    requestId: ctx.requestId,
+    ipAddress: ctx.ipAddress || request.ip,
+    userAgent: ctx.userAgent,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
 export default async function authRoutes(fastify: FastifyInstance): Promise<void> {
   /**
    * POST /auth/register
-   * Register a new user.
    */
   fastify.post<{ Body: RegisterInput }>(
     '/register',
@@ -80,8 +88,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         },
       },
     },
-    async (request: FastifyRequest<{ Body: RegisterInput }>, reply: FastifyReply) => {
-      // Validate request body
+    async (request, reply) => {
       const parseResult = registerSchema.safeParse(request.body);
       if (!parseResult.success) {
         return reply.code(400).send({
@@ -91,68 +98,27 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         });
       }
 
-      const { email, password, firstName, lastName } = parseResult.data;
-
       try {
-        // Check if user with this email exists
-        const existingUser = await prisma.user.findUnique({
-          where: { email: email.toLowerCase() },
-        });
+        const result = await authService.register(
+          parseResult.data,
+          getContext(request),
+          request.log
+        );
 
-        if (existingUser) {
-          // Return generic message to prevent user enumeration
-          // Use same timing as successful registration to prevent timing attacks
-          await hashPassword(password); // Consume similar time
-          return reply.code(400).send({
-            error: 'Registration Failed',
-            message: 'Unable to complete registration. Please try again or contact support.',
+        if (!result.success) {
+          return reply.code(result.statusCode).send({
+            error: result.error,
+            message: result.message,
+            details: result.details,
           });
         }
 
-        // Hash password
-        const passwordHash = await hashPassword(password);
-
-        // Security: All users start as viewers
-        // Admin setup must be done via secure channel (environment variable or database seed)
-        // Check for INITIAL_ADMIN_EMAIL environment variable for first admin setup
-        const initialAdminEmail = process.env['INITIAL_ADMIN_EMAIL']?.toLowerCase();
-        const userCount = await prisma.user.count();
-        const isInitialAdmin = userCount === 0 && initialAdminEmail && email.toLowerCase() === initialAdminEmail;
-        const role = isInitialAdmin ? 'admin' : 'viewer';
-
-        // Create user
-        const user = await prisma.user.create({
-          data: {
-            email: email.toLowerCase(),
-            passwordHash,
-            firstName,
-            lastName,
-            role,
-            permissions: [],
-            isActive: true,
-          },
-        });
-
-        // Generate tokens
-        const tokens = await generateTokenPair({
-          id: user.id,
-          email: user.email,
-          role: user.role,
-        });
-
-        // Set HttpOnly cookies
-        setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+        setAuthCookies(reply, result.accessToken, result.refreshToken);
 
         return reply.code(201).send({
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-          },
-          // Also return tokens in response body for backwards compatibility
-          ...tokens,
+          user: result.user,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
         });
       } catch (error) {
         request.log.error(error, 'Registration failed');
@@ -166,7 +132,6 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
   /**
    * POST /auth/login
-   * Authenticate user and return tokens.
    */
   fastify.post<{ Body: LoginInput }>(
     '/login',
@@ -182,8 +147,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         },
       },
     },
-    async (request: FastifyRequest<{ Body: LoginInput }>, reply: FastifyReply) => {
-      // Validate request body
+    async (request, reply) => {
       const parseResult = loginSchema.safeParse(request.body);
       if (!parseResult.success) {
         return reply.code(400).send({
@@ -193,58 +157,27 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         });
       }
 
-      const { email, password } = parseResult.data;
-
       try {
-        // Find user by email
-        const user = await prisma.user.findUnique({
-          where: { email: email.toLowerCase() },
-        });
+        const result = await authService.login(
+          parseResult.data,
+          getContext(request),
+          request.log
+        );
 
-        if (!user || !user.isActive || !user.passwordHash) {
-          return reply.code(401).send({
-            error: 'Unauthorized',
-            message: 'Invalid email or password',
+        if (!result.success) {
+          return reply.code(result.statusCode).send({
+            error: result.error,
+            message: result.message,
+            retryAfter: result.retryAfter,
           });
         }
 
-        // Verify password
-        const isValid = await verifyPassword(user.passwordHash, password);
-        if (!isValid) {
-          return reply.code(401).send({
-            error: 'Unauthorized',
-            message: 'Invalid email or password',
-          });
-        }
-
-        // Update last login timestamp (fire and forget)
-        prisma.user
-          .update({
-            where: { id: user.id },
-            data: { lastLoginAt: new Date() },
-          })
-          .catch((err) => request.log.error(err, 'Failed to update last login'));
-
-        // Generate tokens
-        const tokens = await generateTokenPair({
-          id: user.id,
-          email: user.email,
-          role: user.role,
-        });
-
-        // Set HttpOnly cookies
-        setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
+        setAuthCookies(reply, result.accessToken, result.refreshToken);
 
         return reply.send({
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            role: user.role,
-          },
-          // Also return tokens in response body for backwards compatibility
-          ...tokens,
+          user: result.user,
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
         });
       } catch (error) {
         request.log.error(error, 'Login failed');
@@ -258,7 +191,6 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
   /**
    * POST /auth/refresh
-   * Exchange refresh token for new access token.
    */
   fastify.post<{ Body: RefreshTokenInput }>(
     '/refresh',
@@ -272,8 +204,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         },
       },
     },
-    async (request: FastifyRequest<{ Body: RefreshTokenInput }>, reply: FastifyReply) => {
-      // Try cookie first, then body
+    async (request, reply) => {
       const refreshToken = request.cookies['refreshToken'] || request.body?.refreshToken;
 
       if (!refreshToken) {
@@ -284,38 +215,30 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
       }
 
       try {
-        // Verify refresh token
-        const userId = await verifyRefreshToken(refreshToken);
-        if (!userId) {
-          return reply.code(401).send({
-            error: 'Unauthorized',
-            message: 'Invalid or expired refresh token',
+        const result = await authService.refresh(
+          refreshToken,
+          getContext(request),
+          request.log
+        );
+
+        if (!result.success) {
+          if (result.securityEvent) {
+            clearAuthCookies(reply);
+          }
+          return reply.code(result.statusCode).send({
+            error: result.error,
+            message: result.message,
+            securityEvent: result.securityEvent,
           });
         }
 
-        // Get user data
-        const user = await prisma.user.findUnique({
-          where: { id: userId },
+        setAuthCookies(reply, result.accessToken, result.refreshToken);
+
+        return reply.send({
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+          sessionId: result.sessionId,
         });
-
-        if (!user || !user.isActive) {
-          return reply.code(401).send({
-            error: 'Unauthorized',
-            message: 'User not found or inactive',
-          });
-        }
-
-        // Generate new tokens
-        const tokens = await generateTokenPair({
-          id: user.id,
-          email: user.email,
-          role: user.role,
-        });
-
-        // Set HttpOnly cookies
-        setAuthCookies(reply, tokens.accessToken, tokens.refreshToken);
-
-        return reply.send(tokens);
       } catch (error) {
         request.log.error(error, 'Token refresh failed');
         return reply.code(500).send({
@@ -328,14 +251,11 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
   /**
    * GET /auth/me
-   * Get current authenticated user info.
    */
   fastify.get(
     '/me',
-    {
-      preHandler: [authenticate],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    { preHandler: [authenticate] },
+    async (request, reply) => {
       if (!request.user) {
         return reply.code(401).send({
           error: 'Unauthorized',
@@ -368,15 +288,11 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           });
         }
 
-        // Get app settings
         const settings = await prisma.appSettings.findFirst();
 
         return reply.send({
           user,
-          app: settings ? {
-            name: settings.name,
-            plan: settings.plan,
-          } : null,
+          app: settings ? { name: settings.name, plan: settings.plan } : null,
         });
       } catch (error) {
         request.log.error(error, 'Failed to get user info');
@@ -389,29 +305,119 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
   );
 
   /**
+   * POST /auth/forgot-password
+   */
+  fastify.post<{ Body: { email: string } }>(
+    '/forgot-password',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await authService.requestPasswordReset(
+          request.body.email,
+          getContext(request),
+          request.log
+        );
+
+        if (!result.success) {
+          return reply.code(result.statusCode).send({
+            error: result.error,
+            message: result.message,
+            retryAfter: result.retryAfter,
+          });
+        }
+
+        if (result.token && process.env['NODE_ENV'] !== 'production') {
+          request.log.info({ resetToken: result.token }, 'Password reset token generated (dev only)');
+        }
+
+        return reply.send({
+          success: true,
+          message: result.message,
+        });
+      } catch (error) {
+        request.log.error(error, 'Password reset request failed');
+        return reply.code(500).send({
+          error: 'Internal Server Error',
+          message: 'Failed to process password reset request',
+        });
+      }
+    }
+  );
+
+  /**
+   * POST /auth/reset-password
+   */
+  fastify.post<{ Body: { token: string; newPassword: string } }>(
+    '/reset-password',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['token', 'newPassword'],
+          properties: {
+            token: { type: 'string', minLength: 1 },
+            newPassword: { type: 'string', minLength: 8 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await authService.resetPassword(
+          request.body.token,
+          request.body.newPassword,
+          getContext(request),
+          request.log
+        );
+
+        if (!result.success) {
+          return reply.code(result.statusCode).send({
+            error: result.error,
+            message: result.message,
+          });
+        }
+
+        return reply.send({
+          success: true,
+          message: result.message,
+        });
+      } catch (error) {
+        request.log.error(error, 'Password reset failed');
+        return reply.code(500).send({
+          error: 'Internal Server Error',
+          message: 'Failed to reset password',
+        });
+      }
+    }
+  );
+
+  /**
    * POST /auth/logout
-   * Logout current user and invalidate tokens.
    */
   fastify.post(
     '/logout',
-    {
-      preHandler: [authenticate],
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    { preHandler: [authenticate] },
+    async (request, reply) => {
       try {
-        // Blacklist the current access token
-        const accessToken = extractToken(request);
-        if (accessToken) {
-          await blacklistToken(accessToken, ACCESS_TOKEN_TTL);
-        }
+        await authService.logout(
+          request.user?.sub,
+          request.user?.jti,
+          extractToken(request) ?? undefined,
+          request.cookies?.['refreshToken'] ?? undefined,
+          getContext(request),
+          request.log
+        );
 
-        // Blacklist the refresh token if present
-        const refreshToken = request.cookies?.['refreshToken'];
-        if (refreshToken) {
-          await blacklistToken(refreshToken, REFRESH_TOKEN_TTL);
-        }
-
-        // Clear auth cookies
         clearAuthCookies(reply);
 
         return reply.send({
@@ -420,7 +426,6 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         });
       } catch (error) {
         request.log.error(error, 'Logout failed');
-        // Still clear cookies even if blacklisting fails
         clearAuthCookies(reply);
         return reply.send({
           success: true,

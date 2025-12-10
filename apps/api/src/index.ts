@@ -4,6 +4,7 @@ import helmet from '@fastify/helmet';
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { checkDatabaseHealth, disconnectDatabase } from './lib/db.js';
+import requestContextPlugin from './middleware/request-context.js';
 import authPlugin from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import documentRoutes from './routes/documents.js';
@@ -13,10 +14,18 @@ import analyticsRoutes from './routes/analytics.js';
 import exportRoutes from './routes/exports.js';
 import userRoutes from './routes/users.js';
 import apiKeyRoutes from './routes/api-keys.js';
+import auditLogRoutes from './routes/audit-logs.js';
+import metricsRoutes from './routes/metrics.js';
+import sessionRoutes from './routes/sessions.js';
+import mfaRoutes from './routes/mfa.js';
 import { validateApiKey } from './middleware/api-key.js';
+import { recordHttpRequest } from './lib/metrics.js';
 import { createRateLimitHook, RATE_LIMITS } from './lib/rate-limit.js';
 import { registerOpenApi } from './lib/openapi.js';
 import { secrets } from './lib/secrets.js';
+import csrfMiddleware, { csrfRoutes } from './middleware/csrf.js';
+import { initializeFromEnv as initializeFieldEncryption } from './lib/field-encryption.js';
+import { getSecureLoggerConfig } from './middleware/secure-logging.js';
 
 /**
  * Environment validation for security-critical configuration.
@@ -33,10 +42,45 @@ if (IS_PRODUCTION && COOKIE_SECRET && COOKIE_SECRET.length < 32) {
   throw new Error('FATAL: COOKIE_SECRET must be at least 32 characters long');
 }
 
+// Initialize field encryption (required for MFA and sensitive data)
+try {
+  initializeFieldEncryption();
+} catch (err) {
+  if (IS_PRODUCTION) {
+    throw err; // Fatal in production
+  }
+  console.warn('[Encryption] Field encryption not configured, using fallback. Set FIELD_ENCRYPTION_KEY for production.');
+}
+
+// Get secure logger configuration (redacts sensitive data like passwords, tokens, etc.)
+const secureLoggerConfig = getSecureLoggerConfig();
+
 const fastify = Fastify({
-  logger: true,
+  logger: {
+    level: process.env['LOG_LEVEL'] || (IS_PRODUCTION ? 'info' : 'debug'),
+    // Use secure serializers that redact sensitive data
+    // Type assertion needed because Fastify's serializer types are stricter than our custom serializers
+    serializers: {
+      ...secureLoggerConfig.serializers,
+      // Extend request serializer to include request ID
+      req(request: {
+        method?: string;
+        url?: string;
+        headers?: Record<string, string | string[] | undefined>;
+        requestContext?: { requestId: string };
+      }) {
+        const baseReq = secureLoggerConfig.serializers.req(request);
+        return {
+          ...baseReq,
+          requestId: request.requestContext?.requestId,
+        };
+      },
+    } as Record<string, (arg: unknown) => unknown>,
+  },
   // Trust proxy headers when behind a reverse proxy (needed for rate limiting)
   trustProxy: IS_PRODUCTION,
+  // Generate request IDs via the request-context middleware
+  genReqId: () => '',
 });
 
 // Register security headers with helmet
@@ -87,6 +131,16 @@ await fastify.register(multipart, {
   },
 });
 
+// Register request context middleware (must be before auth for audit logging)
+await fastify.register(requestContextPlugin);
+
+// Register CSRF protection middleware
+// Skips API key authenticated requests and safe methods (GET/HEAD/OPTIONS)
+await fastify.register(csrfMiddleware, {
+  ignorePaths: ['/health', '/metrics', '/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/forgot-password', '/api/v1/auth/reset-password'],
+  skipForApiKey: true,
+});
+
 // Register authentication plugin
 await fastify.register(authPlugin);
 
@@ -96,17 +150,96 @@ fastify.addHook('preHandler', validateApiKey);
 // Add rate limiting hook
 fastify.addHook('preHandler', createRateLimitHook(RATE_LIMITS.default));
 
-// Health check endpoint
-fastify.get('/health', async () => {
+// Add metrics collection hook
+fastify.addHook('onResponse', async (request, reply) => {
+  const startTime = request.requestContext?.requestId
+    ? Date.now() - (request as { startTime?: number }).startTime!
+    : 0;
+
+  // Skip metrics endpoint to avoid recursion
+  if (request.url === '/metrics') return;
+
+  recordHttpRequest(
+    request.method,
+    request.url,
+    reply.statusCode,
+    startTime,
+    request.headers['content-length'] ? parseInt(request.headers['content-length'] as string, 10) : undefined
+  );
+});
+
+// Store request start time
+fastify.addHook('onRequest', async (request) => {
+  (request as { startTime?: number }).startTime = Date.now();
+});
+
+// Health check endpoint - minimal info in production to prevent information leakage
+fastify.get('/health', async (request, reply) => {
   const dbHealthy = await checkDatabaseHealth();
+  const isHealthy = dbHealthy;
+
+  // In production, only return minimal status to prevent information disclosure
+  if (IS_PRODUCTION) {
+    // Return appropriate status code based on health
+    reply.code(isHealthy ? 200 : 503);
+    return {
+      status: isHealthy ? 'healthy' : 'unhealthy',
+    };
+  }
+
+  // In development, return more detailed info for debugging
+  reply.code(isHealthy ? 200 : 503);
   return {
-    status: dbHealthy ? 'healthy' : 'unhealthy',
+    status: isHealthy ? 'healthy' : 'unhealthy',
     timestamp: new Date().toISOString(),
     services: {
       database: dbHealthy ? 'up' : 'down',
     },
   };
 });
+
+// Detailed health check for authenticated admins
+fastify.get('/health/detailed', {
+  preHandler: [
+    async (request, reply) => {
+      // Check if user is authenticated and is admin
+      if (!request.user || request.user.role !== 'admin') {
+        return reply.code(401).send({ error: 'Unauthorized' });
+      }
+    },
+  ],
+}, async (request, reply) => {
+  const dbHealthy = await checkDatabaseHealth();
+
+  // Check Redis health
+  let redisHealthy = false;
+  try {
+    const { redis } = await import('./lib/redis.js');
+    await redis.ping();
+    redisHealthy = true;
+  } catch {
+    redisHealthy = false;
+  }
+
+  const allHealthy = dbHealthy && redisHealthy;
+
+  reply.code(allHealthy ? 200 : 503);
+  return {
+    status: allHealthy ? 'healthy' : 'unhealthy',
+    timestamp: new Date().toISOString(),
+    services: {
+      database: {
+        status: dbHealthy ? 'up' : 'down',
+      },
+      redis: {
+        status: redisHealthy ? 'up' : 'down',
+      },
+    },
+  };
+});
+
+// Prometheus metrics endpoint (unauthenticated, protect at network level)
+await fastify.register(metricsRoutes, { prefix: '/metrics' });
 
 // API version prefix
 fastify.register(
@@ -120,6 +253,9 @@ fastify.register(
 
     // Auth routes
     await app.register(authRoutes, { prefix: '/auth' });
+
+    // CSRF token endpoint
+    await app.register(csrfRoutes, { prefix: '/csrf' });
 
     // Document routes
     await app.register(documentRoutes, { prefix: '/documents' });
@@ -139,8 +275,17 @@ fastify.register(
     // User management routes
     await app.register(userRoutes, { prefix: '/users' });
 
+    // Session management routes (nested under users)
+    await app.register(sessionRoutes, { prefix: '/users' });
+
     // API key management routes
     await app.register(apiKeyRoutes, { prefix: '/api-keys' });
+
+    // Audit log routes (admin/auditor only)
+    await app.register(auditLogRoutes, { prefix: '/audit-logs' });
+
+    // MFA routes
+    await app.register(mfaRoutes, { prefix: '/mfa' });
 
     // Register OpenAPI documentation routes
     await registerOpenApi(app);

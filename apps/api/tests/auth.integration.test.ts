@@ -27,7 +27,7 @@ describe('Auth integration', () => {
       url: '/auth/register',
       payload: {
         email: 'user1@example.com',
-        password: 'Str0ngP@ss!',
+        password: 'Str0ngP@ss!123',
         firstName: 'Test',
         lastName: 'User',
       },
@@ -39,7 +39,7 @@ describe('Auth integration', () => {
       url: '/auth/login',
       payload: {
         email: 'user1@example.com',
-        password: 'Str0ngP@ss!',
+        password: 'Str0ngP@ss!123',
       },
     });
     expect(login.statusCode).toBe(200);
@@ -69,7 +69,7 @@ describe('Auth integration', () => {
       url: '/auth/register',
       payload: {
         email: 'firstadmin@example.com',
-        password: 'Str0ngP@ss!',
+        password: 'Str0ngP@ss!123',
         firstName: 'First',
         lastName: 'Admin',
       },
@@ -89,7 +89,7 @@ describe('Auth integration', () => {
       url: '/auth/register',
       payload: {
         email: 'firstuser@example.com',
-        password: 'Str0ngP@ss!',
+        password: 'Str0ngP@ss!123',
         firstName: 'First',
         lastName: 'User',
       },
@@ -109,7 +109,7 @@ describe('Auth integration', () => {
       url: '/auth/register',
       payload: {
         email: 'different-user@example.com',
-        password: 'Str0ngP@ss!',
+        password: 'Str0ngP@ss!123',
         firstName: 'Different',
         lastName: 'User',
       },
@@ -126,7 +126,7 @@ describe('Auth integration', () => {
       url: '/auth/login',
       payload: {
         email: 'doesnotexist@example.com',
-        password: 'wrong-password',
+        password: 'Wr0ngP@ssword!123',
       },
     });
 

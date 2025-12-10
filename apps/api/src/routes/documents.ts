@@ -1,36 +1,34 @@
+/**
+ * Document Routes
+ *
+ * HTTP layer for document operations.
+ * Business logic is delegated to DocumentService.
+ */
+
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../lib/db.js';
-import {
-  uploadFile,
-  deleteFile,
-  generateStoragePath,
-  calculateFileHash,
-  getPresignedDownloadUrl,
-} from '../lib/s3.js';
 import { authenticate } from '../middleware/auth.js';
+import { getAuditContext } from '../middleware/request-context.js';
+import { documentService, type ServiceContext } from '../services/document.service.js';
 
-/**
- * Allowed MIME types for document upload.
- */
-const ALLOWED_MIME_TYPES = [
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-excel',
-  'text/csv',
-  'image/png',
-  'image/jpeg',
-];
+// ═══════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Maximum file size (10MB).
- */
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+function getContext(request: FastifyRequest): ServiceContext {
+  const ctx = getAuditContext(request);
+  return {
+    requestId: ctx.requestId,
+    ipAddress: ctx.ipAddress || request.ip,
+    userAgent: ctx.userAgent,
+  };
+}
 
-/**
- * Document routes plugin.
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════════════════════
+
 export default async function documentRoutes(fastify: FastifyInstance): Promise<void> {
-  // Apply auth to all routes
   fastify.addHook('preHandler', authenticate);
 
   /**
@@ -63,7 +61,6 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
       }
 
       const data = await request.file();
-
       if (!data) {
         return reply.code(400).send({
           error: 'Bad Request',
@@ -71,92 +68,32 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         });
       }
 
-      if (!ALLOWED_MIME_TYPES.includes(data.mimetype)) {
-        return reply.code(400).send({
-          error: 'Bad Request',
-          message: `Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}`,
-        });
-      }
-
       const buffer = await data.toBuffer();
 
-      if (buffer.length > MAX_FILE_SIZE) {
-        return reply.code(400).send({
-          error: 'Bad Request',
-          message: `File too large. Maximum size: ${MAX_FILE_SIZE / 1024 / 1024}MB`,
-        });
+      const result = await documentService.upload(
+        { buffer, filename: data.filename, mimetype: data.mimetype },
+        request.user.sub,
+        getContext(request),
+        request.log
+      );
+
+      if (!result.success) {
+        const response: Record<string, unknown> = {
+          error: result.error,
+          message: result.message,
+        };
+        if (result.details) {
+          const details = result.details as Record<string, unknown>;
+          if ('existingDocumentId' in details) {
+            response['existingDocumentId'] = details['existingDocumentId'];
+          } else {
+            response['details'] = result.details;
+          }
+        }
+        return reply.code(result.statusCode).send(response);
       }
 
-      const fileHash = calculateFileHash(buffer);
-
-      // Check for duplicate
-      const existingDoc = await prisma.document.findUnique({
-        where: { fileHash },
-      });
-
-      if (existingDoc) {
-        return reply.code(409).send({
-          error: 'Conflict',
-          message: 'Document with identical content already exists',
-          existingDocumentId: existingDoc.id,
-        });
-      }
-
-      // Generate storage path
-      const storagePath = generateStoragePath(data.filename);
-
-      try {
-        await uploadFile(storagePath, buffer, data.mimetype);
-      } catch (error) {
-        request.log.error(error, 'Failed to upload file to S3');
-        return reply.code(500).send({
-          error: 'Internal Server Error',
-          message: 'Failed to store document',
-        });
-      }
-
-      // Create document and outbox event in transaction
-      const document = await prisma.$transaction(async (tx) => {
-        const doc = await tx.document.create({
-          data: {
-            filename: storagePath.split('/').pop() || data.filename,
-            originalFilename: data.filename,
-            mimeType: data.mimetype,
-            fileSize: buffer.length,
-            fileHash,
-            storagePath,
-            extractionStatus: 'pending',
-            verificationStatus: 'pending',
-            uploadedBy: request.user!.sub,
-          },
-        });
-
-        await tx.outboxEvent.create({
-          data: {
-            aggregateType: 'document',
-            aggregateId: doc.id,
-            eventType: 'document.uploaded',
-            payload: {
-              documentId: doc.id,
-              filename: doc.originalFilename,
-              mimeType: doc.mimeType,
-              storagePath: doc.storagePath,
-            },
-          },
-        });
-
-        return doc;
-      });
-
-      return reply.code(201).send({
-        id: document.id,
-        filename: document.filename,
-        originalFilename: document.originalFilename,
-        mimeType: document.mimeType,
-        fileSize: document.fileSize,
-        extractionStatus: document.extractionStatus,
-        uploadedAt: document.uploadedAt.toISOString(),
-      });
+      return reply.code(201).send(result.data);
     }
   );
 
@@ -227,6 +164,21 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
 
       const { id } = request.params;
 
+      // Check access
+      const accessResult = await documentService.checkAccess(
+        id,
+        request.user.sub,
+        getContext(request),
+        request.log
+      );
+
+      if (!accessResult.allowed) {
+        return reply.code(404).send({
+          error: 'Not Found',
+          message: 'Document not found',
+        });
+      }
+
       const document = await prisma.document.findUnique({
         where: { id },
         include: {
@@ -263,34 +215,21 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const { id } = request.params;
+      const result = await documentService.getDownloadUrl(
+        request.params.id,
+        request.user.sub,
+        getContext(request),
+        request.log
+      );
 
-      const document = await prisma.document.findUnique({
-        where: { id },
-        select: { storagePath: true, originalFilename: true },
-      });
-
-      if (!document) {
-        return reply.code(404).send({
-          error: 'Not Found',
-          message: 'Document not found',
+      if (!result.success) {
+        return reply.code(result.statusCode).send({
+          error: result.error,
+          message: result.message,
         });
       }
 
-      try {
-        const downloadUrl = await getPresignedDownloadUrl(document.storagePath);
-        return reply.send({
-          downloadUrl,
-          filename: document.originalFilename,
-          expiresIn: 3600,
-        });
-      } catch (error) {
-        request.log.error(error, 'Failed to generate presigned URL');
-        return reply.code(500).send({
-          error: 'Internal Server Error',
-          message: 'Failed to generate download URL',
-        });
-      }
+      return reply.send(result.data);
     }
   );
 
@@ -304,38 +243,19 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const { id } = request.params;
+      const result = await documentService.delete(
+        request.params.id,
+        request.user.sub,
+        getContext(request),
+        request.log
+      );
 
-      const document = await prisma.document.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          storagePath: true,
-          _count: { select: { costRecords: true } },
-        },
-      });
-
-      if (!document) {
-        return reply.code(404).send({
-          error: 'Not Found',
-          message: 'Document not found',
+      if (!result.success) {
+        return reply.code(result.statusCode).send({
+          error: result.error,
+          message: result.message,
         });
       }
-
-      if (document._count.costRecords > 0) {
-        return reply.code(409).send({
-          error: 'Conflict',
-          message: 'Cannot delete document with linked cost records',
-        });
-      }
-
-      try {
-        await deleteFile(document.storagePath);
-      } catch (error) {
-        request.log.error(error, 'Failed to delete file from S3');
-      }
-
-      await prisma.document.delete({ where: { id } });
 
       return reply.code(204).send();
     }
@@ -351,49 +271,23 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         return reply.code(401).send({ error: 'Unauthorized' });
       }
 
-      const { id } = request.params;
+      const result = await documentService.retryExtraction(
+        request.params.id,
+        request.user.sub,
+        getContext(request),
+        request.log
+      );
 
-      const document = await prisma.document.findUnique({
-        where: { id },
-      });
-
-      if (!document) {
-        return reply.code(404).send({
-          error: 'Not Found',
-          message: 'Document not found',
+      if (!result.success) {
+        return reply.code(result.statusCode).send({
+          error: result.error,
+          message: result.message,
         });
       }
-
-      if (!['failed', 'manual'].includes(document.extractionStatus)) {
-        return reply.code(400).send({
-          error: 'Bad Request',
-          message: 'Can only retry extraction for failed or manual documents',
-        });
-      }
-
-      await prisma.$transaction(async (tx) => {
-        await tx.document.update({
-          where: { id },
-          data: { extractionStatus: 'pending' },
-        });
-
-        await tx.outboxEvent.create({
-          data: {
-            aggregateType: 'document',
-            aggregateId: id,
-            eventType: 'document.extraction_retry',
-            payload: {
-              documentId: id,
-              storagePath: document.storagePath,
-              mimeType: document.mimeType,
-            },
-          },
-        });
-      });
 
       return reply.send({
         success: true,
-        message: 'Extraction retry queued',
+        message: result.data.message,
       });
     }
   );
