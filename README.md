@@ -3,7 +3,7 @@
   <img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="License">
   <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Node.js-20+-339933.svg?logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Tests-537%20passing-success.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-569%20passing-success.svg" alt="Tests">
   <img src="https://img.shields.io/badge/Security-Enterprise%20Ready-green.svg" alt="Security">
   <img src="https://img.shields.io/badge/GDPR-Compliant-blue.svg" alt="GDPR">
   <img src="https://img.shields.io/badge/OWASP-Top%2010-orange.svg" alt="OWASP">
@@ -32,6 +32,7 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 
 - **8 Anomalie-Checks** (YoY, MoM, Preissprünge, statistische Ausreißer, Saisonalität, ...)
 - **Sofortige Alerts** via E-Mail, Slack oder Microsoft Teams
+- **Daily Digest** mit konfigurierbarer Zeit und User-Preferences
 - **Dashboard** mit Drill-Down nach Standort, Lieferant, Kostenart
 - **PDF-Extraktion** mit Template-Matching und LLM-Fallback
 
@@ -47,6 +48,8 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 |---------|-------------|
 | **Anomaly Detection** | 8 verschiedene Checks mit konfigurierbaren Schwellwerten |
 | **Multi-Channel Alerts** | E-Mail, Slack, Microsoft Teams |
+| **Daily Digest** | Zeitgesteuerte Zusammenfassung mit User-Preferences |
+| **Notification Preferences** | Pro Nutzer steuerbare Alert- und Digest-Settings |
 | **Document Processing** | PDF, Excel, CSV mit automatischer Datenextraktion |
 | **Role-Based Access** | Admin, Manager, Analyst, Viewer, Auditor |
 | **API-First** | RESTful API mit API-Key Authentifizierung |
@@ -238,7 +241,16 @@ docker build -t cost-watchdog-web --build-arg NEXT_PUBLIC_API_URL=https://api.ex
 docker-compose -f infrastructure/docker-compose.yml up -d
 ```
 
+### Database Migrations
+
+```bash
+# Apply migrations in production/CI
+pnpm db:deploy
+```
+
 ### Environment Variables
+
+See `.env.example` for the full list (including daily digest and retention settings).
 
 ```env
 # Database
@@ -247,15 +259,19 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/costwatchdog
 # Redis
 REDIS_URL=redis://localhost:6379
 
-# JWT
-JWT_SECRET=your-secret-key
-JWT_REFRESH_SECRET=your-refresh-secret
+# Auth
+AUTH_SECRET=your-secret-here-min-32-chars-long
+AUTH_URL=http://localhost:3000
 
 # S3/MinIO
 S3_ENDPOINT=http://localhost:9000
 S3_ACCESS_KEY=minioadmin
 S3_SECRET_KEY=minioadmin
 S3_BUCKET=documents
+
+# App
+API_URL=http://localhost:3001
+WEB_URL=http://localhost:3000
 
 # Optional: LLM für PDF-Extraktion
 OPENAI_API_KEY=sk-...
@@ -276,7 +292,7 @@ pnpm test -- --coverage
 pnpm --filter @cost-watchdog/api test anomalies.test.ts
 ```
 
-**Test-Status:** 537 Tests passing (30+ Test-Dateien)
+**Test-Status:** 569 Tests passing (33 Test-Dateien)
 
 ---
 
