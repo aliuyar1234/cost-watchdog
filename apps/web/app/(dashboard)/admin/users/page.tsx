@@ -2,27 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../lib/auth-context';
+import { usersApi, type UserDetails } from '../../../lib/api/users';
 
-interface User {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  isActive: boolean;
-  lastLoginAt: string | null;
-  createdAt: string;
-}
-
-interface PaginatedResponse {
-  data: User[];
-  pagination: {
-    total: number;
-    limit: number;
-    offset: number;
-    hasMore: boolean;
-  };
-}
+type User = UserDetails;
 
 const ROLES = [
   { value: 'admin', label: 'Administrator' },
@@ -47,21 +29,15 @@ export default function UsersPage() {
     role: 'viewer',
   });
 
-  const API_URL = process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001';
+  const getErrorMessage = (err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : fallback;
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch users');
-
-      const data: PaginatedResponse = await response.json();
+      const data = await usersApi.list();
       setUsers(data.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Laden');
+      setError(getErrorMessage(err, 'Fehler beim Laden'));
     } finally {
       setLoading(false);
     }
@@ -74,26 +50,12 @@ export default function UsersPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/users`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Failed to create user');
-      }
-
+      await usersApi.create(formData);
       setShowCreateModal(false);
       setFormData({ email: '', password: '', firstName: '', lastName: '', role: 'viewer' });
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Erstellen');
+      setError(getErrorMessage(err, 'Fehler beim Erstellen'));
     }
   };
 
@@ -102,30 +64,16 @@ export default function UsersPage() {
     if (!editingUser) return;
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/users/${editingUser.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          role: formData.role,
-        }),
+      await usersApi.update(editingUser.id, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        role: formData.role,
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Failed to update user');
-      }
-
       setEditingUser(null);
       setFormData({ email: '', password: '', firstName: '', lastName: '', role: 'viewer' });
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Aktualisieren');
+      setError(getErrorMessage(err, 'Fehler beim Aktualisieren'));
     }
   };
 
@@ -133,20 +81,10 @@ export default function UsersPage() {
     if (!confirm('Benutzer wirklich deaktivieren?')) return;
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/users/${userId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Failed to deactivate user');
-      }
-
+      await usersApi.delete(userId);
       fetchUsers();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Deaktivieren');
+      setError(getErrorMessage(err, 'Fehler beim Deaktivieren'));
     }
   };
 
@@ -158,24 +96,10 @@ export default function UsersPage() {
     }
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/users/${userId}/reset-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ newPassword }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Failed to reset password');
-      }
-
+      await usersApi.resetPassword(userId, newPassword);
       alert('Passwort erfolgreich zurückgesetzt');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Fehler beim Zurücksetzen');
+      setError(getErrorMessage(err, 'Fehler beim Zurücksetzen'));
     }
   };
 

@@ -5,6 +5,7 @@ import {
   cleanupTokenBlacklist,
   cleanupOutboxEvents,
   cleanupOutboxEventsBatched,
+  cleanupDailyDigests,
   cleanupLoginAttempts,
   cleanupPasswordResetTokens,
   cleanupAuditLogs,
@@ -40,7 +41,7 @@ describe('Data Retention', () => {
     // Clean up password reset tokens first (due to foreign key)
     await prisma.passwordResetToken.deleteMany({ where: { userId: testUserId } }).catch(() => {});
     // Then clean up test user
-    await prisma.user.delete({ where: { id: testUserId } }).catch(() => {});
+    await prisma.user.deleteMany({ where: { id: testUserId } }).catch(() => {});
   });
 
   describe('getRetentionConfig', () => {
@@ -48,6 +49,7 @@ describe('Data Retention', () => {
       const config = getRetentionConfig();
 
       expect(config.outboxEventRetentionDays).toBeTypeOf('number');
+      expect(config.dailyDigestRetentionDays).toBeTypeOf('number');
       expect(config.loginAttemptRetentionDays).toBeTypeOf('number');
       expect(config.passwordResetTokenRetentionDays).toBeTypeOf('number');
       expect(config.auditLogRetentionDays).toBeTypeOf('number');
@@ -57,15 +59,23 @@ describe('Data Retention', () => {
 
     it('should use environment variables when set', () => {
       const originalEnv = process.env['RETENTION_OUTBOX_DAYS'];
+      const originalDigestEnv = process.env['RETENTION_DAILY_DIGEST_DAYS'];
       process.env['RETENTION_OUTBOX_DAYS'] = '7';
+      process.env['RETENTION_DAILY_DIGEST_DAYS'] = '14';
 
       const config = getRetentionConfig();
       expect(config.outboxEventRetentionDays).toBe(7);
+      expect(config.dailyDigestRetentionDays).toBe(14);
 
       if (originalEnv) {
         process.env['RETENTION_OUTBOX_DAYS'] = originalEnv;
       } else {
         delete process.env['RETENTION_OUTBOX_DAYS'];
+      }
+      if (originalDigestEnv) {
+        process.env['RETENTION_DAILY_DIGEST_DAYS'] = originalDigestEnv;
+      } else {
+        delete process.env['RETENTION_DAILY_DIGEST_DAYS'];
       }
     });
   });
@@ -258,6 +268,67 @@ describe('Data Retention', () => {
 
       expect(result.success).toBe(true);
       expect(result.deletedCount).toBe(15);
+    });
+  });
+
+  describe('cleanupDailyDigests', () => {
+    beforeEach(async () => {
+      await prisma.dailyDigest.deleteMany({
+        where: { recipient: { contains: 'retention-digest' } },
+      });
+    });
+
+    it('should clean up old daily digest records', async () => {
+      const now = new Date();
+      const oldDate = new Date(now);
+      oldDate.setDate(oldDate.getDate() - 40);
+      const recentDate = new Date(now);
+      recentDate.setDate(recentDate.getDate() - 5);
+      const keyBase = Date.now();
+
+      await prisma.dailyDigest.create({
+        data: {
+          digestKey: `retention-${keyBase}-old`,
+          channel: 'email',
+          recipient: 'retention-digest-old@example.com',
+          windowStart: oldDate,
+          windowEnd: oldDate,
+          status: 'sent',
+          attempts: 1,
+          createdAt: oldDate,
+        },
+      });
+
+      await prisma.dailyDigest.create({
+        data: {
+          digestKey: `retention-${keyBase}-recent`,
+          channel: 'email',
+          recipient: 'retention-digest-recent@example.com',
+          windowStart: recentDate,
+          windowEnd: recentDate,
+          status: 'sent',
+          attempts: 1,
+          createdAt: recentDate,
+        },
+      });
+
+      const result = await cleanupDailyDigests(30);
+
+      expect(result.success).toBe(true);
+
+      const oldCount = await prisma.dailyDigest.count({
+        where: { recipient: 'retention-digest-old@example.com' },
+      });
+      const recentCount = await prisma.dailyDigest.count({
+        where: { recipient: 'retention-digest-recent@example.com' },
+      });
+
+      expect(oldCount).toBe(0);
+      expect(recentCount).toBe(1);
+
+      await prisma.dailyDigest.deleteMany({
+        where: { recipient: { contains: 'retention-digest' } },
+      });
     });
   });
 
@@ -513,6 +584,7 @@ describe('Data Retention', () => {
 
       expect(result.results.tokenBlacklist).toBeDefined();
       expect(result.results.outboxEvents).toBeDefined();
+      expect(result.results.dailyDigests).toBeDefined();
       expect(result.results.loginAttempts).toBeDefined();
       expect(result.results.passwordResetTokens).toBeDefined();
       expect(result.results.auditLogs).toBeDefined();
@@ -524,12 +596,14 @@ describe('Data Retention', () => {
     it('should use custom configuration', async () => {
       const result = await runRetentionCleanup({
         outboxEventRetentionDays: 1,
+        dailyDigestRetentionDays: 1,
         loginAttemptRetentionDays: 1,
         auditLogRetentionDays: 1,
         batchSize: 10,
       });
 
       expect(result.results.outboxEvents.success).toBe(true);
+      expect(result.results.dailyDigests.success).toBe(true);
       expect(result.results.loginAttempts.success).toBe(true);
       expect(result.results.auditLogs.success).toBe(true);
     });
@@ -543,6 +617,11 @@ describe('Data Retention', () => {
       expect(typeof stats.outboxEvents.total).toBe('number');
       expect(typeof stats.outboxEvents.processed).toBe('number');
       expect(typeof stats.outboxEvents.pending).toBe('number');
+
+      expect(stats.dailyDigests).toBeDefined();
+      expect(typeof stats.dailyDigests.total).toBe('number');
+      expect(typeof stats.dailyDigests.last30d).toBe('number');
+      expect(typeof stats.dailyDigests.older).toBe('number');
 
       expect(stats.loginAttempts).toBeDefined();
       expect(typeof stats.loginAttempts.total).toBe('number');

@@ -212,6 +212,10 @@ export class RetentionWorker {
             success: result.results.outboxEvents.success,
             deleted: result.results.outboxEvents.deletedCount,
           },
+          dailyDigests: {
+            success: result.results.dailyDigests.success,
+            deleted: result.results.dailyDigests.deletedCount,
+          },
           loginAttempts: {
             success: result.results.loginAttempts.success,
             deleted: result.results.loginAttempts.deletedCount,

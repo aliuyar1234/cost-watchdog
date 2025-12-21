@@ -65,6 +65,7 @@ model User {
   avatarUrl             String?   @map("avatar_url")
   role                  String    @default("viewer") // admin, manager, analyst, viewer, auditor
   permissions           Json      @default("[]")
+  notificationSettings  Json?     @map("notification_settings")
   allowedLocationIds    String[]  @map("allowed_location_ids") @db.Uuid
   allowedCostCenterIds  String[]  @map("allowed_cost_center_ids") @db.Uuid
   isActive              Boolean   @default(true) @map("is_active")
@@ -83,6 +84,7 @@ model User {
   acknowledgedCostRecordAnomalies CostRecord[]       @relation("CostRecordAnomalyAcknowledgedBy")
   acknowledgedAnomalies         Anomaly[]            @relation("AnomalyAcknowledgedBy")
   alerts                        Alert[]              @relation("AlertUser")
+  dailyDigests                  DailyDigest[]
   createdAnomalySuppressions    AnomalySuppression[] @relation("AnomalySuppressionCreatedBy")
   createdApiKeys                ApiKey[]             @relation("ApiKeyCreatedBy")
 
@@ -366,6 +368,30 @@ model Alert {
 
   @@unique([anomalyId, channel])
   @@map("alerts")
+}
+
+model DailyDigest {
+  id            String    @id @default(uuid()) @db.Uuid
+  digestKey     String    @map("digest_key")
+  channel       String    // email, slack, teams
+  recipient     String
+  userId        String?   @map("user_id") @db.Uuid
+  windowStart   DateTime  @map("window_start")
+  windowEnd     DateTime  @map("window_end")
+  status        String    @default("pending") // pending, sent, failed
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  sentAt        DateTime? @map("sent_at")
+  errorMessage  String?   @map("error_message")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([digestKey, channel, recipient])
+  @@index([digestKey, channel])
+  @@index([createdAt])
+  @@map("daily_digests")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

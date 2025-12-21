@@ -232,7 +232,7 @@ Jede Anomalie erhält einen Schweregrad: `info`, `warning`, oder `critical`.
 ```bash
 # Production Build
 docker build -t cost-watchdog-api -f apps/api/Dockerfile .
-docker build -t cost-watchdog-web -f apps/web/Dockerfile .
+docker build -t cost-watchdog-web --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/api/v1 -f apps/web/Dockerfile .
 
 # Mit Docker Compose
 docker-compose -f infrastructure/docker-compose.yml up -d

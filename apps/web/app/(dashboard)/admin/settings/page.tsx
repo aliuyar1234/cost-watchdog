@@ -2,68 +2,126 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../../lib/auth-context';
+import { settingsApi, ApiError, type AlertSettings, type ThresholdSettings, type GeneralSettings } from '../../../lib/api';
 
-interface AlertSettings {
-  emailEnabled: boolean;
-  slackEnabled: boolean;
-  teamsEnabled: boolean;
-  slackWebhookUrl: string;
-  teamsWebhookUrl: string;
-  notifyOnCritical: boolean;
-  notifyOnWarning: boolean;
-  notifyOnInfo: boolean;
-  dailyDigestEnabled: boolean;
-  dailyDigestTime: string;
-}
+const DEFAULT_ALERT_SETTINGS: AlertSettings = {
+  emailEnabled: true,
+  slackEnabled: false,
+  teamsEnabled: false,
+  slackWebhookUrl: '',
+  teamsWebhookUrl: '',
+  notifyOnCritical: true,
+  notifyOnWarning: true,
+  notifyOnInfo: false,
+  dailyDigestEnabled: false,
+  dailyDigestTime: '08:00',
+  maxAlertsPerDay: 50,
+};
 
-interface AnomalyThresholds {
-  yoyThreshold: number;
-  momThreshold: number;
-  pricePerUnitThreshold: number;
-  budgetThreshold: number;
-  minHistoricalMonths: number;
-}
+const DEFAULT_THRESHOLDS: ThresholdSettings = {
+  yoyThreshold: 20,
+  momThreshold: 30,
+  pricePerUnitThreshold: 10,
+  budgetThreshold: 10,
+  minHistoricalMonths: 12,
+};
+
+const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  timezone: 'UTC',
+};
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'alerts' | 'thresholds' | 'api'>('alerts');
-  const [alertSettings, setAlertSettings] = useState<AlertSettings>({
-    emailEnabled: true,
-    slackEnabled: false,
-    teamsEnabled: false,
-    slackWebhookUrl: '',
-    teamsWebhookUrl: '',
-    notifyOnCritical: true,
-    notifyOnWarning: true,
-    notifyOnInfo: false,
-    dailyDigestEnabled: true,
-    dailyDigestTime: '08:00',
-  });
-  const [thresholds, setThresholds] = useState<AnomalyThresholds>({
-    yoyThreshold: 15,
-    momThreshold: 25,
-    pricePerUnitThreshold: 20,
-    budgetThreshold: 10,
-    minHistoricalMonths: 12,
-  });
+  const [activeTab, setActiveTab] = useState<'general' | 'alerts' | 'thresholds' | 'api'>('general');
+  const [alertSettings, setAlertSettings] = useState<AlertSettings>(DEFAULT_ALERT_SETTINGS);
+  const [thresholds, setThresholds] = useState<ThresholdSettings>(DEFAULT_THRESHOLDS);
+  const [generalSettings, setGeneralSettings] = useState<GeneralSettings>(DEFAULT_GENERAL_SETTINGS);
   const [saving, setSaving] = useState(false);
   const [testingSlack, setTestingSlack] = useState(false);
   const [testingTeams, setTestingTeams] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const API_URL = process.env['NEXT_PUBLIC_API_URL'] || 'http://localhost:3001';
+  useEffect(() => {
+    if (user?.role !== 'admin') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSettings = async () => {
+      try {
+        const data = await settingsApi.get();
+        if (cancelled) {
+          return;
+        }
+
+        setAlertSettings({
+          ...DEFAULT_ALERT_SETTINGS,
+          ...(data.alerts ?? {}),
+        });
+        setThresholds({
+          ...DEFAULT_THRESHOLDS,
+          ...(data.thresholds ?? {}),
+        });
+        setGeneralSettings({
+          ...DEFAULT_GENERAL_SETTINGS,
+          ...(data.general ?? {}),
+        });
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        const errorMessage = err instanceof ApiError
+          ? err.message
+          : 'Fehler beim Laden der Einstellungen';
+        setMessage({ type: 'error', text: errorMessage });
+      }
+    };
+
+    loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role]);
+
+  const handleSaveGeneral = async () => {
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const response = await settingsApi.updateGeneral(generalSettings);
+      setGeneralSettings({
+        ...DEFAULT_GENERAL_SETTINGS,
+        ...response.general,
+      });
+      setMessage({ type: 'success', text: 'Allgemeine Einstellungen gespeichert!' });
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Fehler beim Speichern der allgemeinen Einstellungen';
+      setMessage({ type: 'error', text: errorMessage });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSaveAlerts = async () => {
     setSaving(true);
     setMessage(null);
 
     try {
-      // In a real implementation, this would save to the backend
-      // For now, we'll just simulate success
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await settingsApi.updateAlerts(alertSettings);
+      setAlertSettings({
+        ...DEFAULT_ALERT_SETTINGS,
+        ...response.alerts,
+      });
       setMessage({ type: 'success', text: 'Benachrichtigungseinstellungen gespeichert!' });
-    } catch {
-      setMessage({ type: 'error', text: 'Fehler beim Speichern der Einstellungen' });
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Fehler beim Speichern der Einstellungen';
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSaving(false);
     }
@@ -74,10 +132,17 @@ export default function SettingsPage() {
     setMessage(null);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const response = await settingsApi.updateThresholds(thresholds);
+      setThresholds({
+        ...DEFAULT_THRESHOLDS,
+        ...response.thresholds,
+      });
       setMessage({ type: 'success', text: 'Schwellenwerte gespeichert!' });
-    } catch {
-      setMessage({ type: 'error', text: 'Fehler beim Speichern der Schwellenwerte' });
+    } catch (err) {
+      const errorMessage = err instanceof ApiError
+        ? err.message
+        : 'Fehler beim Speichern der Schwellenwerte';
+      setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSaving(false);
     }
@@ -93,23 +158,14 @@ export default function SettingsPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/settings/test-slack`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ webhookUrl: alertSettings.slackWebhookUrl }),
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Slack Test erfolgreich! Prüfen Sie Ihren Kanal.' });
+      await settingsApi.testSlackWebhook(alertSettings.slackWebhookUrl);
+      setMessage({ type: 'success', text: 'Slack Test erfolgreich! Prüfen Sie Ihren Kanal.' });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setMessage({ type: 'error', text: err.message });
       } else {
-        setMessage({ type: 'error', text: 'Slack Test fehlgeschlagen. Überprüfen Sie die URL.' });
+        setMessage({ type: 'error', text: 'Fehler beim Testen der Slack-Verbindung' });
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Fehler beim Testen der Slack-Verbindung' });
     } finally {
       setTestingSlack(false);
     }
@@ -125,23 +181,14 @@ export default function SettingsPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/settings/test-teams`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ webhookUrl: alertSettings.teamsWebhookUrl }),
-      });
-
-      if (response.ok) {
-        setMessage({ type: 'success', text: 'Teams Test erfolgreich! Prüfen Sie Ihren Kanal.' });
+      await settingsApi.testTeamsWebhook(alertSettings.teamsWebhookUrl);
+      setMessage({ type: 'success', text: 'Teams Test erfolgreich! Prüfen Sie Ihren Kanal.' });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setMessage({ type: 'error', text: err.message });
       } else {
-        setMessage({ type: 'error', text: 'Teams Test fehlgeschlagen. Überprüfen Sie die URL.' });
+        setMessage({ type: 'error', text: 'Fehler beim Testen der Teams-Verbindung' });
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Fehler beim Testen der Teams-Verbindung' });
     } finally {
       setTestingTeams(false);
     }
@@ -161,7 +208,7 @@ export default function SettingsPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Einstellungen</h1>
-        <p className="text-gray-600 mt-1">Konfigurieren Sie Benachrichtigungen und Schwellenwerte</p>
+        <p className="text-gray-600 mt-1">Konfigurieren Sie allgemeine Einstellungen, Benachrichtigungen und Schwellenwerte</p>
       </div>
 
       {message && (
@@ -176,13 +223,14 @@ export default function SettingsPage() {
       <div className="border-b border-gray-200 mb-6">
         <nav className="flex gap-8">
           {[
+            { id: 'general', label: 'Allgemein' },
             { id: 'alerts', label: 'Benachrichtigungen' },
             { id: 'thresholds', label: 'Schwellenwerte' },
             { id: 'api', label: 'API-Schlüssel' },
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'alerts' | 'thresholds' | 'api')}
+              onClick={() => setActiveTab(tab.id as 'general' | 'alerts' | 'thresholds' | 'api')}
               className={`pb-4 text-sm font-medium border-b-2 -mb-px ${
                 activeTab === tab.id
                   ? 'border-blue-600 text-blue-600'
@@ -194,6 +242,44 @@ export default function SettingsPage() {
           ))}
         </nav>
       </div>
+
+      {/* General Settings */}
+      {activeTab === 'general' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold mb-6">Allgemeine Einstellungen</h2>
+          <p className="text-gray-600 mb-6">
+            Steuern Sie die Zeitzone der Anwendung (z. B. fuer die taegliche Zusammenfassung).
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Zeitzone
+              </label>
+              <input
+                type="text"
+                value={generalSettings.timezone}
+                onChange={(e) => setGeneralSettings({ ...generalSettings, timezone: e.target.value })}
+                placeholder="Europe/Berlin"
+                className="border rounded-lg px-3 py-2 w-full"
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Verwenden Sie eine IANA-Zeitzone wie Europe/Berlin oder America/New_York.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-8">
+            <button
+              onClick={handleSaveGeneral}
+              disabled={saving}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? 'Speichere...' : 'Speichern'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Alert Settings */}
       {activeTab === 'alerts' && (
@@ -361,6 +447,25 @@ export default function SettingsPage() {
                 Info
               </span>
             </label>
+          </div>
+
+          {/* Alert Limits */}
+          <h2 className="text-lg font-semibold mb-4">Alert limits</h2>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Max alerts per day
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={alertSettings.maxAlertsPerDay}
+              onChange={(e) => setAlertSettings({ ...alertSettings, maxAlertsPerDay: Number(e.target.value) })}
+              className="border rounded-lg px-3 py-2 w-32"
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              Limits total alerts sent across all channels per day.
+            </p>
           </div>
 
           {/* Daily Digest */}

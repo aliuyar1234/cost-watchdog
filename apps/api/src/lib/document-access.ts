@@ -185,9 +185,8 @@ export async function canDeleteDocument(
  * Useful for building filtered document lists.
  *
  * Note: For users with location/cost center restrictions, this performs
- * a more complex query through cost records. For simplicity, this returns
- * all documents for restricted users and relies on canAccessDocument for
- * individual access checks. A more efficient implementation would use
+ * a more complex query through cost records and includes unprocessed
+ * documents (no cost records). A more efficient implementation would use
  * a subquery or materialized view.
  */
 export async function getAccessibleDocuments(
@@ -197,9 +196,11 @@ export async function getAccessibleDocuments(
     offset?: number;
     orderBy?: 'uploadedAt' | 'filename';
     order?: 'asc' | 'desc';
+    status?: string;
   } = {}
 ): Promise<{ documents: unknown[]; total: number }> {
-  const { limit = 20, offset = 0, orderBy = 'uploadedAt', order = 'desc' } = options;
+  const { limit = 20, offset = 0, orderBy = 'uploadedAt', order = 'desc', status } = options;
+  const statusFilter = status ? { extractionStatus: status } : {};
 
   // Get user with access restrictions
   const user = await prisma.user.findUnique({
@@ -221,11 +222,12 @@ export async function getAccessibleDocuments(
   if (['admin', 'manager', 'auditor'].includes(user.role)) {
     const [documents, total] = await Promise.all([
       prisma.document.findMany({
+        where: statusFilter,
         take: limit,
         skip: offset,
         orderBy: { [orderBy]: order },
       }),
-      prisma.document.count(),
+      prisma.document.count({ where: statusFilter }),
     ]);
     return { documents, total };
   }
@@ -238,11 +240,12 @@ export async function getAccessibleDocuments(
   if (userLocations.length === 0 && userCostCenters.length === 0) {
     const [documents, total] = await Promise.all([
       prisma.document.findMany({
+        where: statusFilter,
         take: limit,
         skip: offset,
         orderBy: { [orderBy]: order },
       }),
-      prisma.document.count(),
+      prisma.document.count({ where: statusFilter }),
     ]);
     return { documents, total };
   }
@@ -279,7 +282,7 @@ export async function getAccessibleDocuments(
   const allAccessibleIds = [...new Set([...accessibleIds, ...unprocessedIds])];
 
   // Build where clause using accessible IDs
-  const whereClause = { id: { in: allAccessibleIds } };
+  const whereClause = { id: { in: allAccessibleIds }, ...statusFilter };
 
   const [documents, total] = await Promise.all([
     prisma.document.findMany({

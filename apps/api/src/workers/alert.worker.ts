@@ -2,20 +2,18 @@ import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../lib/redis.js';
 import { QUEUE_NAMES, type AlertJobData } from '../lib/queues.js';
 import { prisma } from '../lib/db.js';
+import { loadAlertSettings } from '../lib/alert-settings.js';
 import {
   sendAnomalyAlertEmail,
   type AnomalyAlertEmailData,
 } from '../lib/email.js';
+import { sendSlackAnomalyAlert } from '../lib/slack.js';
+import { sendTeamsAnomalyAlert } from '../lib/teams.js';
 
 /**
  * Dashboard URL for email links
  */
 const DASHBOARD_URL = process.env['WEB_URL'] || 'http://localhost:3000';
-
-/**
- * Alert fatigue protection: max alerts per day
- */
-const MAX_ALERTS_PER_DAY = parseInt(process.env['MAX_ALERTS_PER_DAY'] || '50', 10);
 
 /**
  * Map anomaly type to German label
@@ -78,10 +76,27 @@ function formatDate(date: Date): string {
   });
 }
 
+function parseRecipients(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function getRecipientName(recipients: string[]): string {
+  if (recipients.length === 0) {
+    return 'Nutzer';
+  }
+  if (recipients.length > 1) {
+    return 'Team';
+  }
+  return recipients[0]?.split('@')[0] || 'Nutzer';
+}
+
 /**
  * Check if daily alert limit has been exceeded
  */
-async function hasExceededDailyLimit(): Promise<boolean> {
+async function hasExceededDailyLimit(maxAlertsPerDay: number): Promise<boolean> {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -92,7 +107,7 @@ async function hasExceededDailyLimit(): Promise<boolean> {
     },
   });
 
-  return count >= MAX_ALERTS_PER_DAY;
+  return count >= maxAlertsPerDay;
 }
 
 /**
@@ -103,8 +118,10 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
 
   console.log(`[AlertWorker] Processing alert ${alertId} for anomaly ${anomalyId}`);
 
+  const alertSettings = await loadAlertSettings();
+
   // Check daily limit
-  if (await hasExceededDailyLimit()) {
+  if (await hasExceededDailyLimit(alertSettings.maxAlertsPerDay)) {
     console.log(`[AlertWorker] Daily alert limit exceeded, skipping`);
     await prisma.alert.update({
       where: { id: alertId },
@@ -158,11 +175,8 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
     return;
   }
 
-  // Build email data
   const details = anomaly.details as Record<string, unknown> | null;
-  const emailData: AnomalyAlertEmailData = {
-    recipientEmail: alert.recipient,
-    recipientName: alert.recipient.split('@')[0] || 'Nutzer',
+  const alertData = {
     anomalyType: getAnomalyTypeLabel(anomaly.type),
     severity: anomaly.severity as 'info' | 'warning' | 'critical',
     message: anomaly.message,
@@ -183,7 +197,26 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
 
   switch (alert.channel) {
     case 'email':
-      result = await sendAnomalyAlertEmail(emailData);
+      const recipients = parseRecipients(alert.recipient);
+      result = await sendAnomalyAlertEmail({
+        recipientEmail: recipients.length > 0 ? recipients : alert.recipient,
+        recipientName: getRecipientName(recipients),
+        ...alertData,
+      } satisfies AnomalyAlertEmailData);
+      break;
+
+    case 'slack':
+      result = await sendSlackAnomalyAlert({
+        webhookUrl: alert.recipient,
+        ...alertData,
+      });
+      break;
+
+    case 'teams':
+      result = await sendTeamsAnomalyAlert({
+        webhookUrl: alert.recipient,
+        ...alertData,
+      });
       break;
 
     case 'in_app':
@@ -191,7 +224,6 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
       result = { success: true };
       break;
 
-    // TODO: Add slack, teams, webhook handlers
     default:
       result = { success: false, error: `Unsupported channel: ${alert.channel}` };
   }

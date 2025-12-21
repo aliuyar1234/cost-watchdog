@@ -5,6 +5,7 @@ import { sendNotFound, sendBadRequest, sendForbidden } from '../lib/errors.js';
 import { authenticate } from '../middleware/auth.js';
 import { logAuditEvent } from '../lib/audit.js';
 import { getAuditContext } from '../middleware/request-context.js';
+import { API_KEY_SCOPES } from '../lib/api-key-scopes.js';
 
 interface ApiKeyQuery {
   limit?: number;
@@ -37,16 +38,7 @@ interface ApiKeyWithSecret extends ApiKeyResponse {
   apiKey: string;
 }
 
-const VALID_SCOPES = [
-  'read:cost_records',
-  'write:cost_records',
-  'read:anomalies',
-  'write:anomalies',
-  'read:documents',
-  'write:documents',
-  'read:analytics',
-  'read:exports',
-] as const;
+const VALID_SCOPES = API_KEY_SCOPES;
 
 function generateApiKey(): { key: string; hash: string; prefix: string } {
   const key = `cwk_${randomBytes(32).toString('base64url')}`;
@@ -313,10 +305,14 @@ function getScopeDescription(scope: string): string {
     'write:cost_records': 'Create and update cost records',
     'read:anomalies': 'Read anomalies',
     'write:anomalies': 'Update anomaly status',
+    'read:alerts': 'Read alerts',
+    'write:alerts': 'Retry or manage alerts',
     'read:documents': 'Read documents',
     'write:documents': 'Upload and manage documents',
     'read:analytics': 'Read analytics data',
     'read:exports': 'Export data',
+    'read:users': 'Read users',
+    'write:users': 'Create and manage users',
   };
   return descriptions[scope] || scope;
 }

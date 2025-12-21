@@ -105,6 +105,7 @@ services:
       - ./secrets/db_url:/run/secrets/db_url:ro
       - ./secrets/redis_url:/run/secrets/redis_url:ro
       - ./secrets/auth_secret:/run/secrets/auth_secret:ro
+      - ./secrets/field_encryption_key:/run/secrets/field_encryption_key:ro
       - ./secrets/s3_access_key:/run/secrets/s3_access_key:ro
       - ./secrets/s3_secret_key:/run/secrets/s3_secret_key:ro
     # No external ports - only accessible via Traefik
@@ -160,7 +161,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      API_URL: http://api:3001
+      NEXT_PUBLIC_API_URL: https://api.${DOMAIN:?DOMAIN is required}/api/v1
     # No external ports - only accessible via Traefik
     expose:
       - "3000"
@@ -217,6 +218,7 @@ services:
       S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
       S3_REGION: ${S3_REGION:-eu-central-1}
+      WEB_URL: https://${DOMAIN:?DOMAIN is required}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
     volumes:
@@ -224,6 +226,7 @@ services:
       - ./secrets/db_url:/run/secrets/db_url:ro
       - ./secrets/redis_url:/run/secrets/redis_url:ro
       - ./secrets/auth_secret:/run/secrets/auth_secret:ro
+      - ./secrets/field_encryption_key:/run/secrets/field_encryption_key:ro
       - ./secrets/s3_access_key:/run/secrets/s3_access_key:ro
       - ./secrets/s3_secret_key:/run/secrets/s3_secret_key:ro
     networks:
@@ -266,13 +269,14 @@ volumes:
 #    echo "postgresql://user:pass@host:5432/db" > ./secrets/db_url
 #    echo "redis://host:6379" > ./secrets/redis_url
 #    openssl rand -base64 32 > ./secrets/auth_secret
+#    openssl rand -base64 32 > ./secrets/field_encryption_key
 #    echo "your-s3-access-key" > ./secrets/s3_access_key
 #    echo "your-s3-secret-key" > ./secrets/s3_secret_key
 #    chmod 600 ./secrets/*
 #
 # 2. Build images:
 #    docker build -t cost-watchdog-api:v1.0.0 -f apps/api/Dockerfile .
-#    docker build -t cost-watchdog-web:v1.0.0 -f apps/web/Dockerfile .
+#    docker build -t cost-watchdog-web:v1.0.0 --build-arg NEXT_PUBLIC_API_URL=https://api.$DOMAIN/api/v1 -f apps/web/Dockerfile .
 #
 # 3. Run (replace with your domain and email):
 #    VERSION=v1.0.0 \

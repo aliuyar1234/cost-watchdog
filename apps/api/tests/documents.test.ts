@@ -155,6 +155,94 @@ describe('Document Routes', () => {
       expect(body.pagination.offset).toBe(2);
     });
 
+    it('filters documents by user access restrictions', async () => {
+      const org = await prisma.organization.create({
+        data: { name: 'Restricted Org', legalName: 'Restricted GmbH' },
+      });
+      const allowedLocation = await prisma.location.create({
+        data: {
+          organizationId: org.id,
+          name: 'Allowed Location',
+          address: { country: 'DE' },
+          type: 'office',
+          ownershipType: 'leased',
+        },
+      });
+      const blockedLocation = await prisma.location.create({
+        data: {
+          organizationId: org.id,
+          name: 'Blocked Location',
+          address: { country: 'DE' },
+          type: 'office',
+          ownershipType: 'leased',
+        },
+      });
+      const supplier = await prisma.supplier.create({
+        data: {
+          name: 'Restricted Supplier',
+          category: 'energy_electricity',
+          costTypes: ['electricity'],
+        },
+      });
+
+      const allowedDoc = await createTestDocument({ filename: 'allowed.pdf' });
+      const blockedDoc = await createTestDocument({ filename: 'blocked.pdf' });
+
+      await prisma.costRecord.create({
+        data: {
+          sourceDocumentId: allowedDoc.id,
+          supplierId: supplier.id,
+          locationId: allowedLocation.id,
+          periodStart: new Date('2024-01-01'),
+          periodEnd: new Date('2024-01-31'),
+          amount: 500,
+          costType: 'electricity',
+          currency: 'EUR',
+        },
+      });
+
+      await prisma.costRecord.create({
+        data: {
+          sourceDocumentId: blockedDoc.id,
+          supplierId: supplier.id,
+          locationId: blockedLocation.id,
+          periodStart: new Date('2024-02-01'),
+          periodEnd: new Date('2024-02-28'),
+          amount: 600,
+          costType: 'electricity',
+          currency: 'EUR',
+        },
+      });
+
+      const restrictedUser = await prisma.user.create({
+        data: {
+          email: 'restricted@test.com',
+          passwordHash: 'placeholder',
+          firstName: 'Restricted',
+          lastName: 'User',
+          role: 'viewer',
+          allowedLocationIds: [allowedLocation.id],
+        },
+      });
+
+      const restrictedTokens = await generateTokenPair({
+        id: restrictedUser.id,
+        email: restrictedUser.email,
+        role: restrictedUser.role,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/documents',
+        headers: { authorization: `Bearer ${restrictedTokens.accessToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.length).toBe(1);
+      expect(body.data[0].id).toBe(allowedDoc.id);
+    });
+
     it('requires authentication', async () => {
       const response = await app.inject({
         method: 'GET',

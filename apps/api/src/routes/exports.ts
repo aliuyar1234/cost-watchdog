@@ -3,6 +3,7 @@ import { prisma } from '../lib/db.js';
 import { sendBadRequest } from '../lib/errors.js';
 import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { requireScope } from '../lib/api-key-scopes.js';
 
 // Maximum records per export request
 const MAX_EXPORT_LIMIT = 1000;
@@ -24,6 +25,7 @@ interface ExportQuery {
 export const exportRoutes: FastifyPluginAsync = async (fastify) => {
   // Apply auth to all routes
   fastify.addHook('preHandler', authenticate);
+  fastify.addHook('preHandler', requireScope('read:exports'));
 
   /**
    * GET /exports/cost-records

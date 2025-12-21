@@ -5,7 +5,7 @@ import { prisma } from '../lib/db.js';
 import { sendNotFound, sendBadRequest } from '../lib/errors.js';
 import { isValidUUID } from '../lib/validators.js';
 import { authenticate } from '../middleware/auth.js';
-import { requireScope } from '../middleware/api-key.js';
+import { requireScope } from '../lib/api-key-scopes.js';
 import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
 import { secrets } from '../lib/secrets.js';
 
@@ -95,7 +95,9 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
     }
     // Cast to async function type - Fastify supports async hooks without done callback
     await (authenticate as (req: typeof request, rep: typeof reply) => Promise<void>)(request, reply);
-    await requireScope('read:alerts')(request, reply);
+    const isReadMethod = ['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase());
+    const requiredScope = isReadMethod ? 'read:alerts' : 'write:alerts';
+    await requireScope(requiredScope)(request, reply);
   });
 
   /**

@@ -63,6 +63,8 @@ All errors return JSON with \`error\` and \`message\` fields:
     { name: 'Documents', description: 'Document upload and processing' },
     { name: 'Anomalies', description: 'Anomaly detection and management' },
     { name: 'Alerts', description: 'Alert notifications' },
+    { name: 'Settings', description: 'Admin configuration and integrations' },
+    { name: 'Notification Settings', description: 'User notification preferences' },
     { name: 'Analytics', description: 'Dashboard and reporting data' },
     { name: 'Exports', description: 'Data export functionality' },
     { name: 'API Keys', description: 'API key management (Admin only)' },
@@ -158,6 +160,67 @@ All errors return JSON with \`error\` and \`message\` fields:
           clickedAt: { type: 'string', format: 'date-time', nullable: true },
           errorMessage: { type: 'string', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      AlertSettings: {
+        type: 'object',
+        required: [
+          'emailEnabled',
+          'slackEnabled',
+          'teamsEnabled',
+          'slackWebhookUrl',
+          'teamsWebhookUrl',
+          'notifyOnCritical',
+          'notifyOnWarning',
+          'notifyOnInfo',
+          'dailyDigestEnabled',
+          'dailyDigestTime',
+          'maxAlertsPerDay',
+        ],
+        properties: {
+          emailEnabled: { type: 'boolean' },
+          slackEnabled: { type: 'boolean' },
+          teamsEnabled: { type: 'boolean' },
+          slackWebhookUrl: { type: 'string' },
+          teamsWebhookUrl: { type: 'string' },
+          notifyOnCritical: { type: 'boolean' },
+          notifyOnWarning: { type: 'boolean' },
+          notifyOnInfo: { type: 'boolean' },
+          dailyDigestEnabled: { type: 'boolean' },
+          dailyDigestTime: { type: 'string' },
+          maxAlertsPerDay: { type: 'number', minimum: 1 },
+        },
+      },
+      ThresholdSettings: {
+        type: 'object',
+        required: [
+          'yoyThreshold',
+          'momThreshold',
+          'pricePerUnitThreshold',
+          'budgetThreshold',
+          'minHistoricalMonths',
+        ],
+        properties: {
+          yoyThreshold: { type: 'number', minimum: 0 },
+          momThreshold: { type: 'number', minimum: 0 },
+          pricePerUnitThreshold: { type: 'number', minimum: 0 },
+          budgetThreshold: { type: 'number', minimum: 0 },
+          minHistoricalMonths: { type: 'number', minimum: 1 },
+        },
+      },
+      GeneralSettings: {
+        type: 'object',
+        required: ['timezone'],
+        properties: {
+          timezone: { type: 'string' },
+        },
+      },
+      NotificationSettings: {
+        type: 'object',
+        required: ['emailAlertsEnabled', 'dailyDigestEnabled'],
+        properties: {
+          emailAlertsEnabled: { type: 'boolean' },
+          dailyDigestEnabled: { type: 'boolean' },
         },
       },
       Document: {
@@ -613,8 +676,8 @@ All errors return JSON with \`error\` and \`message\` fields:
         },
       },
     },
-    '/api-keys': {
-      get: {
+      '/api-keys': {
+        get: {
         tags: ['API Keys'],
         summary: 'List API keys (Admin only)',
         security: [{ BearerAuth: [] }],
@@ -653,7 +716,20 @@ All errors return JSON with \`error\` and \`message\` fields:
                     type: 'array',
                     items: {
                       type: 'string',
-                      enum: ['read:cost_records', 'write:cost_records', 'read:anomalies', 'write:anomalies', 'read:documents', 'write:documents', 'read:analytics', 'read:exports'],
+                      enum: [
+                        'read:anomalies',
+                        'write:anomalies',
+                        'read:analytics',
+                        'read:alerts',
+                        'write:alerts',
+                        'read:documents',
+                        'write:documents',
+                        'read:exports',
+                        'read:users',
+                        'write:users',
+                        'read:cost_records',
+                        'write:cost_records',
+                      ],
                     },
                   },
                   expiresAt: { type: 'string', format: 'date-time' },
@@ -686,6 +762,291 @@ All errors return JSON with \`error\` and \`message\` fields:
           },
           400: { $ref: '#/components/responses/BadRequest' },
           403: { $ref: '#/components/responses/Forbidden' },
+        },
+        },
+      },
+      '/notification-settings': {
+        get: {
+          tags: ['Notification Settings'],
+          summary: 'Get current user notification settings',
+          security: [{ BearerAuth: [] }],
+          responses: {
+            200: {
+              description: 'Notification settings',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      settings: { $ref: '#/components/schemas/NotificationSettings' },
+                    },
+                  },
+                },
+              },
+            },
+            401: { $ref: '#/components/responses/Unauthorized' },
+          },
+        },
+        put: {
+          tags: ['Notification Settings'],
+          summary: 'Update current user notification settings',
+          security: [{ BearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    emailAlertsEnabled: { type: 'boolean' },
+                    dailyDigestEnabled: { type: 'boolean' },
+                  },
+                  additionalProperties: false,
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: 'Notification settings updated',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      settings: { $ref: '#/components/schemas/NotificationSettings' },
+                    },
+                  },
+                },
+              },
+            },
+            400: { $ref: '#/components/responses/BadRequest' },
+            401: { $ref: '#/components/responses/Unauthorized' },
+          },
+        },
+      },
+      '/settings': {
+        get: {
+          tags: ['Settings'],
+        summary: 'Get alert and threshold settings (Admin only)',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Current settings',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    alerts: { $ref: '#/components/schemas/AlertSettings', nullable: true },
+                    thresholds: { $ref: '#/components/schemas/ThresholdSettings', nullable: true },
+                    general: { $ref: '#/components/schemas/GeneralSettings', nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/settings/alerts': {
+      put: {
+        tags: ['Settings'],
+        summary: 'Update alert settings (Admin only)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/AlertSettings' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Alert settings updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    alerts: { $ref: '#/components/schemas/AlertSettings' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/settings/thresholds': {
+      put: {
+        tags: ['Settings'],
+        summary: 'Update anomaly threshold settings (Admin only)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ThresholdSettings' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Threshold settings updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    thresholds: { $ref: '#/components/schemas/ThresholdSettings' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/settings/general': {
+      put: {
+        tags: ['Settings'],
+        summary: 'Update general settings (Admin only)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/GeneralSettings' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'General settings updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    general: { $ref: '#/components/schemas/GeneralSettings' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/settings/test-slack': {
+      post: {
+        tags: ['Settings'],
+        summary: 'Test Slack webhook (Admin only)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['webhookUrl'],
+                properties: {
+                  webhookUrl: { type: 'string', format: 'uri' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Slack webhook test successful',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          502: {
+            description: 'Slack webhook test failed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/settings/test-teams': {
+      post: {
+        tags: ['Settings'],
+        summary: 'Test Microsoft Teams webhook (Admin only)',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['webhookUrl'],
+                properties: {
+                  webhookUrl: { type: 'string', format: 'uri' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Teams webhook test successful',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+          403: { $ref: '#/components/responses/Forbidden' },
+          502: {
+            description: 'Teams webhook test failed',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Error' },
+              },
+            },
+          },
         },
       },
     },

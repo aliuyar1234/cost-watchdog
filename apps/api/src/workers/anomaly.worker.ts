@@ -2,6 +2,8 @@ import { Worker, Job } from 'bullmq';
 import type { Prisma } from '@prisma/client';
 import {
   createAnomalyEngine,
+  getCheckById,
+  type AnomalySettings,
   type CostRecordToCheck,
   type CheckContext,
   type HistoricalCostRecord,
@@ -12,6 +14,77 @@ import {
 import { createRedisConnection } from '../lib/redis.js';
 import { QUEUE_NAMES } from '../lib/queues.js';
 import { prisma } from '../lib/db.js';
+
+interface ThresholdSettings {
+  yoyThreshold: number;
+  momThreshold: number;
+  pricePerUnitThreshold: number;
+  budgetThreshold: number;
+  minHistoricalMonths: number;
+}
+
+const DEFAULT_THRESHOLD_SETTINGS: ThresholdSettings = {
+  yoyThreshold: DEFAULT_ANOMALY_SETTINGS.alertThresholds.yoyDeviationPercent,
+  momThreshold: DEFAULT_ANOMALY_SETTINGS.alertThresholds.momDeviationPercent,
+  pricePerUnitThreshold: DEFAULT_ANOMALY_SETTINGS.alertThresholds.pricePerUnitDeviationPercent,
+  budgetThreshold: DEFAULT_ANOMALY_SETTINGS.alertThresholds.budgetExceededPercent,
+  minHistoricalMonths: 12,
+};
+
+const SETTINGS_CACHE_TTL_MS = 60 * 1000;
+let cachedThresholdSettings: ThresholdSettings | null = null;
+let cachedThresholdSettingsAt = 0;
+
+function normalizeSettings(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+function isThresholdSettings(value: unknown): value is Partial<ThresholdSettings> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function loadThresholdSettings(): Promise<ThresholdSettings> {
+  const now = Date.now();
+  if (cachedThresholdSettings && now - cachedThresholdSettingsAt < SETTINGS_CACHE_TTL_MS) {
+    return cachedThresholdSettings;
+  }
+
+  const record = await prisma.appSettings.findFirst();
+  const settings = normalizeSettings(record?.settings);
+  const thresholds = settings['thresholds'];
+
+  const merged = {
+    ...DEFAULT_THRESHOLD_SETTINGS,
+    ...(isThresholdSettings(thresholds) ? thresholds : {}),
+  } as ThresholdSettings;
+
+  cachedThresholdSettings = merged;
+  cachedThresholdSettingsAt = now;
+  return merged;
+}
+
+function applyMinHistoricalMonths(minHistoricalMonths: number): void {
+  const yoyCheck = getCheckById('yoy_deviation');
+  if (yoyCheck) {
+    yoyCheck.minHistoricalMonths = minHistoricalMonths;
+  }
+}
+
+function buildAnomalySettings(thresholds: ThresholdSettings): AnomalySettings {
+  return {
+    ...DEFAULT_ANOMALY_SETTINGS,
+    alertThresholds: {
+      ...DEFAULT_ANOMALY_SETTINGS.alertThresholds,
+      yoyDeviationPercent: thresholds.yoyThreshold,
+      momDeviationPercent: thresholds.momThreshold,
+      pricePerUnitDeviationPercent: thresholds.pricePerUnitThreshold,
+      budgetExceededPercent: thresholds.budgetThreshold,
+    },
+  };
+}
 
 /**
  * Job payload for anomaly detection
@@ -71,6 +144,10 @@ export async function processAnomalyDetection(job: Job<AnomalyJobPayload>): Prom
   // Prepare budget context (Budget model may not exist yet)
   const budgetContext: BudgetContext | undefined = undefined;
 
+  const thresholdSettings = await loadThresholdSettings();
+  applyMinHistoricalMonths(thresholdSettings.minHistoricalMonths);
+  const anomalySettings = buildAnomalySettings(thresholdSettings);
+
   // Prepare the record for checking
   const recordToCheck: CostRecordToCheck = {
     id: costRecord.id,
@@ -114,11 +191,11 @@ export async function processAnomalyDetection(job: Job<AnomalyJobPayload>): Prom
     },
     historicalRecords: historicalForContext,
     budget: budgetContext,
-    settings: DEFAULT_ANOMALY_SETTINGS,
+    settings: anomalySettings,
   };
 
   // Create anomaly engine and run detection
-  const engine = createAnomalyEngine();
+  const engine = createAnomalyEngine(anomalySettings);
   const result = await engine.detect(recordToCheck, context, { isBackfill });
 
   console.log(

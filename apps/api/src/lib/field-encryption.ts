@@ -6,6 +6,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import { secrets } from './secrets.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -225,12 +226,12 @@ export function verifyHash(value: string, hash: string): boolean {
  * Optional: FIELD_ENCRYPTION_KEY_LEGACY_* for old keys
  */
 export function initializeFromEnv(): void {
-  const key = process.env['FIELD_ENCRYPTION_KEY'];
+  const key = secrets.getFieldEncryptionKey();
   const version = parseInt(process.env['FIELD_ENCRYPTION_KEY_VERSION'] || '1', 10);
 
   if (!key) {
     // In development, generate a deterministic key from AUTH_SECRET
-    const authSecret = process.env['AUTH_SECRET'];
+    const authSecret = secrets.getAuthSecret();
     if (authSecret && process.env['NODE_ENV'] !== 'production') {
       const devKey = deriveKeyFromPassword(authSecret, 'field-encryption-dev-salt');
       initializeEncryption(devKey, version);

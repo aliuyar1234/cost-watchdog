@@ -30,6 +30,10 @@ RUN pnpm install --frozen-lockfile
 COPY packages/ ./packages/
 COPY apps/web/ ./apps/web/
 
+# Build-time public API base URL (baked into client bundle)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Build (Next.js standalone output includes only production deps)
 RUN pnpm --filter @cost-watchdog/web build
 
@@ -48,6 +52,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Copy standalone build (already optimized by Next.js)
 COPY --from=builder /app/apps/web/.next/standalone ./

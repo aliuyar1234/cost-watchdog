@@ -36,3 +36,11 @@ export type { MonthlyReport } from './exports';
 // Users API
 export { usersApi } from './users';
 export type { UserDetails, UsersResponse } from './users';
+
+// Settings API
+export { settingsApi } from './settings';
+export type { AlertSettings, ThresholdSettings, GeneralSettings, SettingsResponse } from './settings';
+
+// Notification settings API
+export { notificationSettingsApi } from './notification-settings';
+export type { NotificationSettings, NotificationSettingsResponse } from './notification-settings';

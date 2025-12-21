@@ -142,4 +142,35 @@ export const secrets = {
   getRequiredS3SecretKey(): string {
     return readRequiredSecret('s3_secret_key', 'S3_SECRET_KEY');
   },
+
+  /**
+   * Resend API key (email delivery).
+   * Docker secret: resend_api_key
+   * Env var: RESEND_API_KEY
+   */
+  getResendApiKey(): string | undefined {
+    return readSecret('resend_api_key', 'RESEND_API_KEY');
+  },
+
+  /**
+   * Anthropic API key (LLM extraction fallback).
+   * Docker secret: anthropic_api_key
+   * Env var: ANTHROPIC_API_KEY
+   */
+  getAnthropicApiKey(): string | undefined {
+    return readSecret('anthropic_api_key', 'ANTHROPIC_API_KEY');
+  },
+
+  /**
+   * Field encryption key (AES-256).
+   * Docker secret: field_encryption_key
+   * Env var: FIELD_ENCRYPTION_KEY
+   */
+  getFieldEncryptionKey(): string | undefined {
+    return readSecret('field_encryption_key', 'FIELD_ENCRYPTION_KEY');
+  },
+
+  getRequiredFieldEncryptionKey(): string {
+    return readRequiredSecret('field_encryption_key', 'FIELD_ENCRYPTION_KEY');
+  },
 };

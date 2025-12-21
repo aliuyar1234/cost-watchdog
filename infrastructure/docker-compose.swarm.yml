@@ -55,6 +55,7 @@ services:
       - db_url
       - redis_url
       - auth_secret
+      - field_encryption_key
       - s3_access_key
       - s3_secret_key
     # Secrets are mounted as files at /run/secrets/<name>
@@ -114,7 +115,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      API_URL: http://api:3001
+      NEXT_PUBLIC_API_URL: https://api.${DOMAIN:?DOMAIN is required}/api/v1
     networks:
       - app-network
       - traefik-public
@@ -164,12 +165,14 @@ services:
       S3_REGION: ${S3_REGION:-eu-central-1}
       S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
+      WEB_URL: ${WEB_URL:?WEB_URL is required}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
     secrets:
       - db_url
       - redis_url
       - auth_secret
+      - field_encryption_key
       - s3_access_key
       - s3_secret_key
     # Secrets are mounted as files at /run/secrets/<name>
@@ -204,6 +207,8 @@ secrets:
     external: true
   auth_secret:
     external: true
+  field_encryption_key:
+    external: true
   s3_access_key:
     external: true
   s3_secret_key:
@@ -222,24 +227,29 @@ secrets:
 #    echo "postgresql://user:pass@host:5432/db" | docker secret create db_url -
 #    echo "redis://host:6379" | docker secret create redis_url -
 #    openssl rand -base64 32 | docker secret create auth_secret -
+#    openssl rand -base64 32 | docker secret create field_encryption_key -
 #    echo "your-s3-access-key" | docker secret create s3_access_key -
 #    echo "your-s3-secret-key" | docker secret create s3_secret_key -
 #
-# 4. Deploy the stack:
+# 4. Build images (web build requires NEXT_PUBLIC_API_URL):
+#    docker build -t cost-watchdog-api:v1.0.0 -f apps/api/Dockerfile .
+#    docker build -t cost-watchdog-web:v1.0.0 --build-arg NEXT_PUBLIC_API_URL=https://api.$DOMAIN/api/v1 -f apps/web/Dockerfile .
+#
+# 5. Deploy the stack:
 #    VERSION=v1.0.0 DOMAIN=costwatchdog.com WEB_URL=https://costwatchdog.com \
 #    S3_ENDPOINT=https://s3.amazonaws.com S3_BUCKET=cost-watchdog \
 #    docker stack deploy -c docker-compose.swarm.yml cost-watchdog
 #
-# 5. Check services:
+# 6. Check services:
 #    docker stack services cost-watchdog
 #    docker stack ps cost-watchdog
 #
-# 6. View logs:
+# 7. View logs:
 #    docker service logs cost-watchdog_api
 #
-# 7. Scale services:
+# 8. Scale services:
 #    docker service scale cost-watchdog_api=3
 #
-# 8. Update deployment:
+# 9. Update deployment:
 #    VERSION=v1.1.0 docker stack deploy -c docker-compose.swarm.yml cost-watchdog
 # =============================================================================

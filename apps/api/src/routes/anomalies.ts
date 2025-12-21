@@ -62,8 +62,13 @@ const ANOMALY_INCLUDE = {
 export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   // Apply auth to all routes
   fastify.addHook('preHandler', authenticate);
-  // Apply scope check for read operations (write operations have requireRole)
-  fastify.addHook('preHandler', requireScope('read:anomalies'));
+  // Apply scope check for read operations (write operations use write:anomalies)
+  fastify.addHook('preHandler', async (request, reply) => {
+    const isReadMethod = ['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase());
+    if (isReadMethod) {
+      await requireScope('read:anomalies')(request, reply);
+    }
+  });
 
   /**
    * GET /anomalies - List anomalies

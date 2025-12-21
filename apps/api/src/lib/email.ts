@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { secrets } from './secrets.js';
 
 /**
  * Email service for sending alerts and notifications.
@@ -6,8 +7,9 @@ import { Resend } from 'resend';
  */
 
 // Initialize Resend client
-const resend = process.env['RESEND_API_KEY']
-  ? new Resend(process.env['RESEND_API_KEY'])
+const RESEND_API_KEY = secrets.getResendApiKey();
+const resend = RESEND_API_KEY
+  ? new Resend(RESEND_API_KEY)
   : null;
 
 /**
@@ -22,7 +24,7 @@ const EMAIL_CONFIG = {
  * Email template data for anomaly alerts
  */
 export interface AnomalyAlertEmailData {
-  recipientEmail: string;
+  recipientEmail: string | string[];
   recipientName: string;
   anomalyType: string;
   severity: 'info' | 'warning' | 'critical';
@@ -314,6 +316,10 @@ export async function sendAnomalyAlertEmail(data: AnomalyAlertEmailData): Promis
     return { success: false, error: 'Email service not configured' };
   }
 
+  const recipientList = Array.isArray(data.recipientEmail)
+    ? data.recipientEmail
+    : [data.recipientEmail];
+
   try {
     const result = await resend.emails.send({
       from: EMAIL_CONFIG.from,
@@ -329,7 +335,7 @@ export async function sendAnomalyAlertEmail(data: AnomalyAlertEmailData): Promis
       return { success: false, error: result.error.message };
     }
 
-    console.log(`[Email] Anomaly alert sent to ${data.recipientEmail}, messageId: ${result.data?.id}`);
+    console.log(`[Email] Anomaly alert sent to ${recipientList.join(', ')}, messageId: ${result.data?.id}`);
     return { success: true, messageId: result.data?.id };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

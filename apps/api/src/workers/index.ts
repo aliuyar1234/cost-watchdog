@@ -4,6 +4,7 @@ import { createAlertWorker } from './alert.worker.js';
 import { createAggregationWorker } from './aggregation.worker.js';
 import { createOutboxPoller } from './outbox-poller.js';
 import { createRetentionWorker } from './retention.worker.js';
+import { createDailyDigestWorker } from './daily-digest.worker.js';
 import { closeQueues } from '../lib/queues.js';
 import { closeRedis } from '../lib/redis.js';
 import { disconnectDatabase } from '../lib/db.js';
@@ -43,6 +44,10 @@ async function main(): Promise<void> {
   });
   await retentionWorker.start();
 
+  // Start daily digest worker
+  const dailyDigestWorker = createDailyDigestWorker();
+  await dailyDigestWorker.start();
+
   console.log('[Workers] All workers started');
 
   // Graceful shutdown
@@ -52,6 +57,7 @@ async function main(): Promise<void> {
     // Stop polling and scheduled tasks
     outboxPoller.stop();
     retentionWorker.stop();
+    dailyDigestWorker.stop();
 
     // Close workers
     await Promise.all([

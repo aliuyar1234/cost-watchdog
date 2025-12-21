@@ -5,6 +5,7 @@
  * Supports cleanup of:
  * - Token blacklist entries (Redis)
  * - Processed outbox events
+ * - Daily digest records
  * - Old login attempts
  * - Expired password reset tokens
  * - Audit logs (with optional archival)
@@ -20,6 +21,8 @@ import { redis } from './redis.js';
 export interface RetentionConfig {
   /** Days to keep processed outbox events (default: 30) */
   outboxEventRetentionDays: number;
+  /** Days to keep daily digest records (default: 30) */
+  dailyDigestRetentionDays: number;
   /** Days to keep login attempts (default: 90) */
   loginAttemptRetentionDays: number;
   /** Days to keep expired/used password reset tokens (default: 7) */
@@ -45,6 +48,7 @@ export interface RetentionRunResult {
   results: {
     tokenBlacklist: CleanupResult;
     outboxEvents: CleanupResult;
+    dailyDigests: CleanupResult;
     loginAttempts: CleanupResult;
     passwordResetTokens: CleanupResult;
     auditLogs: CleanupResult;
@@ -59,6 +63,7 @@ export interface RetentionRunResult {
 
 const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
   outboxEventRetentionDays: 30,
+  dailyDigestRetentionDays: 30,
   loginAttemptRetentionDays: 90,
   passwordResetTokenRetentionDays: 7,
   auditLogRetentionDays: 365,
@@ -73,6 +78,10 @@ export function getRetentionConfig(): RetentionConfig {
   return {
     outboxEventRetentionDays: parseInt(
       process.env['RETENTION_OUTBOX_DAYS'] || String(DEFAULT_RETENTION_CONFIG.outboxEventRetentionDays),
+      10
+    ),
+    dailyDigestRetentionDays: parseInt(
+      process.env['RETENTION_DAILY_DIGEST_DAYS'] || String(DEFAULT_RETENTION_CONFIG.dailyDigestRetentionDays),
       10
     ),
     loginAttemptRetentionDays: parseInt(
@@ -267,6 +276,62 @@ export async function cleanupOutboxEventsBatched(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DAILY DIGEST CLEANUP
+
+/**
+ * Clean up old daily digest records.
+ */
+export async function cleanupDailyDigests(
+  retentionDays: number = DEFAULT_RETENTION_CONFIG.dailyDigestRetentionDays,
+  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize
+): Promise<CleanupResult> {
+  const startTime = Date.now();
+  let totalDeleted = 0;
+
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
+
+    let hasMore = true;
+    while (hasMore) {
+      const digestsToDelete = await prisma.dailyDigest.findMany({
+        where: {
+          createdAt: { lt: cutoffDate },
+        },
+        select: { id: true },
+        take: batchSize,
+      });
+
+      if (digestsToDelete.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      const result = await prisma.dailyDigest.deleteMany({
+        where: {
+          id: { in: digestsToDelete.map((digest) => digest.id) },
+        },
+      });
+
+      totalDeleted += result.count;
+      hasMore = digestsToDelete.length === batchSize;
+    }
+
+    return {
+      success: true,
+      deletedCount: totalDeleted,
+      durationMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      deletedCount: totalDeleted,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      durationMs: Date.now() - startTime,
+    };
+  }
+}
+
 // LOGIN ATTEMPT CLEANUP
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -516,10 +581,11 @@ export async function runRetentionCleanup(
   console.log(`[DataRetention] Configuration: ${JSON.stringify(fullConfig)}`);
 
   // Run all cleanup tasks
-  const [tokenBlacklist, outboxEvents, loginAttempts, passwordResetTokens, auditLogs] =
+  const [tokenBlacklist, outboxEvents, dailyDigests, loginAttempts, passwordResetTokens, auditLogs] =
     await Promise.all([
       cleanupTokenBlacklist(),
       cleanupOutboxEventsBatched(fullConfig.outboxEventRetentionDays, fullConfig.batchSize),
+      cleanupDailyDigests(fullConfig.dailyDigestRetentionDays, fullConfig.batchSize),
       cleanupLoginAttempts(fullConfig.loginAttemptRetentionDays, fullConfig.batchSize),
       cleanupPasswordResetTokens(fullConfig.passwordResetTokenRetentionDays, fullConfig.batchSize),
       cleanupAuditLogs(fullConfig.auditLogRetentionDays, fullConfig.batchSize, fullConfig.archiveAuditLogs),
@@ -529,6 +595,7 @@ export async function runRetentionCleanup(
   const results = {
     tokenBlacklist,
     outboxEvents,
+    dailyDigests,
     loginAttempts,
     passwordResetTokens,
     auditLogs,
@@ -537,6 +604,7 @@ export async function runRetentionCleanup(
   const totalDeleted =
     tokenBlacklist.deletedCount +
     outboxEvents.deletedCount +
+    dailyDigests.deletedCount +
     loginAttempts.deletedCount +
     passwordResetTokens.deletedCount +
     auditLogs.deletedCount;
@@ -562,6 +630,7 @@ export async function runRetentionCleanup(
  */
 export async function getRetentionStats(): Promise<{
   outboxEvents: { total: number; processed: number; pending: number };
+  dailyDigests: { total: number; last30d: number; older: number };
   loginAttempts: { total: number; last24h: number; last7d: number };
   passwordResetTokens: { total: number; expired: number; used: number };
   auditLogs: { total: number; last30d: number; older: number };
@@ -574,6 +643,8 @@ export async function getRetentionStats(): Promise<{
   const [
     outboxTotal,
     outboxProcessed,
+    dailyDigestTotal,
+    dailyDigestLast30d,
     loginTotal,
     loginLast24h,
     loginLast7d,
@@ -585,6 +656,8 @@ export async function getRetentionStats(): Promise<{
   ] = await Promise.all([
     prisma.outboxEvent.count(),
     prisma.outboxEvent.count({ where: { processedAt: { not: null } } }),
+    prisma.dailyDigest.count(),
+    prisma.dailyDigest.count({ where: { createdAt: { gte: last30d } } }),
     prisma.loginAttempt.count(),
     prisma.loginAttempt.count({ where: { attemptedAt: { gte: last24h } } }),
     prisma.loginAttempt.count({ where: { attemptedAt: { gte: last7d } } }),
@@ -600,6 +673,11 @@ export async function getRetentionStats(): Promise<{
       total: outboxTotal,
       processed: outboxProcessed,
       pending: outboxTotal - outboxProcessed,
+    },
+    dailyDigests: {
+      total: dailyDigestTotal,
+      last30d: dailyDigestLast30d,
+      older: dailyDigestTotal - dailyDigestLast30d,
     },
     loginAttempts: {
       total: loginTotal,

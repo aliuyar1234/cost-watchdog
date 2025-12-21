@@ -4,6 +4,7 @@ import { downloadFile } from '../lib/s3.js';
 import { prisma } from '../lib/db.js';
 import { QUEUE_NAMES, type ExtractionJobData } from '../lib/queues.js';
 import { extractFromPdf, type PdfExtractionConfig } from '@cost-watchdog/connectors/pdf';
+import { secrets } from '../lib/secrets.js';
 
 /**
  * Process a document extraction job.
@@ -31,7 +32,7 @@ async function processExtractionJob(job: Job<ExtractionJobData>): Promise<void> 
     // Configure extraction
     const config: PdfExtractionConfig = {
       useLlmFallback: true,
-      anthropicApiKey: process.env['ANTHROPIC_API_KEY'],
+      anthropicApiKey: secrets.getAnthropicApiKey(),
       minConfidence: 0.7,
     };
 

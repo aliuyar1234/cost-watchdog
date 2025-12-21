@@ -7,6 +7,8 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../lib/db.js';
+import { requireScope } from '../lib/api-key-scopes.js';
+import { getAccessibleDocuments } from '../lib/document-access.js';
 import { authenticate } from '../middleware/auth.js';
 import { getAuditContext } from '../middleware/request-context.js';
 import { documentService, type ServiceContext } from '../services/document.service.js';
@@ -37,6 +39,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
   fastify.post(
     '/upload',
     {
+      preHandler: requireScope('write:documents'),
       schema: {
         consumes: ['multipart/form-data'],
         response: {
@@ -105,6 +108,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
   }>(
     '/',
     {
+      preHandler: requireScope('read:documents'),
       schema: {
         querystring: {
           type: 'object',
@@ -123,30 +127,36 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
 
       const { limit = 50, offset = 0, status } = request.query;
 
-      const [documents, total] = await Promise.all([
-        prisma.document.findMany({
-          where: status ? { extractionStatus: status } : undefined,
-          orderBy: { uploadedAt: 'desc' },
-          take: limit,
-          skip: offset,
-          select: {
-            id: true,
-            filename: true,
-            originalFilename: true,
-            mimeType: true,
-            fileSize: true,
-            extractionStatus: true,
-            verificationStatus: true,
-            uploadedAt: true,
-          },
-        }),
-        prisma.document.count({
-          where: status ? { extractionStatus: status } : undefined,
-        }),
-      ]);
+      const { documents, total } = await getAccessibleDocuments(request.user.sub, {
+        limit,
+        offset,
+        orderBy: 'uploadedAt',
+        order: 'desc',
+        status,
+      });
+
+      const data = (documents as Array<{
+        id: string;
+        filename: string;
+        originalFilename: string;
+        mimeType: string;
+        fileSize: number;
+        extractionStatus: string;
+        verificationStatus: string;
+        uploadedAt: Date;
+      }>).map((doc) => ({
+        id: doc.id,
+        filename: doc.filename,
+        originalFilename: doc.originalFilename,
+        mimeType: doc.mimeType,
+        fileSize: doc.fileSize,
+        extractionStatus: doc.extractionStatus,
+        verificationStatus: doc.verificationStatus,
+        uploadedAt: doc.uploadedAt,
+      }));
 
       return reply.send({
-        data: documents,
+        data,
         pagination: { total, limit, offset },
       });
     }
@@ -157,6 +167,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
    */
   fastify.get<{ Params: { id: string } }>(
     '/:id',
+    { preHandler: requireScope('read:documents') },
     async (request, reply: FastifyReply) => {
       if (!request.user) {
         return reply.code(401).send({ error: 'Unauthorized' });
@@ -210,6 +221,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
    */
   fastify.get<{ Params: { id: string } }>(
     '/:id/download',
+    { preHandler: requireScope('read:documents') },
     async (request, reply: FastifyReply) => {
       if (!request.user) {
         return reply.code(401).send({ error: 'Unauthorized' });
@@ -238,6 +250,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
    */
   fastify.delete<{ Params: { id: string } }>(
     '/:id',
+    { preHandler: requireScope('write:documents') },
     async (request, reply: FastifyReply) => {
       if (!request.user) {
         return reply.code(401).send({ error: 'Unauthorized' });
@@ -266,6 +279,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
    */
   fastify.post<{ Params: { id: string } }>(
     '/:id/retry-extraction',
+    { preHandler: requireScope('write:documents') },
     async (request, reply: FastifyReply) => {
       if (!request.user) {
         return reply.code(401).send({ error: 'Unauthorized' });

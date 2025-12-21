@@ -18,6 +18,8 @@ import auditLogRoutes from './routes/audit-logs.js';
 import metricsRoutes from './routes/metrics.js';
 import sessionRoutes from './routes/sessions.js';
 import mfaRoutes from './routes/mfa.js';
+import settingsRoutes from './routes/settings.js';
+import notificationSettingsRoutes from './routes/notification-settings.js';
 import { validateApiKey } from './middleware/api-key.js';
 import { recordHttpRequest } from './lib/metrics.js';
 import { createRateLimitHook, RATE_LIMITS } from './lib/rate-limit.js';
@@ -134,6 +136,9 @@ await fastify.register(multipart, {
 // Register request context middleware (must be before auth for audit logging)
 await fastify.register(requestContextPlugin);
 
+// Add API key validation hook before CSRF so API key requests can skip CSRF
+fastify.addHook('preHandler', validateApiKey);
+
 // Register CSRF protection middleware
 // Skips API key authenticated requests and safe methods (GET/HEAD/OPTIONS)
 await fastify.register(csrfMiddleware, {
@@ -143,9 +148,6 @@ await fastify.register(csrfMiddleware, {
 
 // Register authentication plugin
 await fastify.register(authPlugin);
-
-// Add API key validation hook
-fastify.addHook('preHandler', validateApiKey);
 
 // Add rate limiting hook
 fastify.addHook('preHandler', createRateLimitHook(RATE_LIMITS.default));
@@ -286,6 +288,12 @@ fastify.register(
 
     // MFA routes
     await app.register(mfaRoutes, { prefix: '/mfa' });
+
+    // Settings routes
+    await app.register(settingsRoutes, { prefix: '/settings' });
+
+    // Notification settings (current user)
+    await app.register(notificationSettingsRoutes, { prefix: '/notification-settings' });
 
     // Register OpenAPI documentation routes
     await registerOpenApi(app);

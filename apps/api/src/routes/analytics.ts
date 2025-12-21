@@ -3,7 +3,7 @@ import { prisma } from '../lib/db.js';
 import { parseQueryInt } from '../lib/validators.js';
 import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
 import { authenticate } from '../middleware/auth.js';
-import { requireScope } from '../middleware/api-key.js';
+import { requireScope } from '../lib/api-key-scopes.js';
 
 interface DashboardQuery {
   year?: string;

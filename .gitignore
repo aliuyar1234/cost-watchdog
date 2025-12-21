@@ -28,6 +28,20 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 
+# Local tooling
+.eslintcache
+.stylelintcache
+.vscode-test/
+.history/
+*.tsbuildinfo
+*.pid
+*.pid.lock
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
 # Test
 coverage/
 

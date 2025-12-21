@@ -49,6 +49,11 @@ export const authenticate: preHandlerHookHandler = async (
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> => {
+  // Allow API key authenticated requests to pass through
+  if (request.user?.role === 'api') {
+    return;
+  }
+
   const token = extractToken(request);
 
   if (!token) {
@@ -115,6 +120,11 @@ export function requireRole(...allowedRoles: string[]): preHandlerHookHandler {
         error: 'Unauthorized',
         message: 'Authentication required',
       });
+      return;
+    }
+
+    // API key access is governed by scopes, not roles
+    if (request.user.role === 'api') {
       return;
     }
 

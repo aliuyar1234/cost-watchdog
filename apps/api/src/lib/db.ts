@@ -7,6 +7,7 @@ import { secrets } from './secrets.js';
  * This runs at module load time, before PrismaClient is instantiated.
  */
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
+const LOG_QUERIES = process.env['PRISMA_LOG_QUERIES'] === 'true';
 
 if (!process.env['DATABASE_URL']) {
   const dbUrl = secrets.getDatabaseUrl();
@@ -31,7 +32,11 @@ const globalForPrisma = globalThis as unknown as {
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
-    log: IS_PRODUCTION ? ['error'] : ['query', 'error', 'warn'],
+    log: IS_PRODUCTION
+      ? ['error']
+      : LOG_QUERIES
+        ? (['query', 'error', 'warn'] as Prisma.LogLevel[])
+        : (['error', 'warn'] as Prisma.LogLevel[]),
   });
 
 if (process.env['NODE_ENV'] !== 'production') {

@@ -1,5 +1,7 @@
 import { prisma } from '../lib/db.js';
 import { queueExtraction, queueAnomalyDetection, queueAlert, queueAggregation } from '../lib/queues.js';
+import { loadAlertSettings, shouldNotifySeverity } from '../lib/alert-settings.js';
+import { resolveUserNotificationSettings } from '../lib/notification-settings.js';
 
 /**
  * Configuration for the outbox poller.
@@ -18,6 +20,50 @@ const DEFAULT_CONFIG: Required<OutboxPollerConfig> = {
   batchSize: 100,
   maxAttempts: 5,
 };
+
+const RECIPIENT_CACHE_TTL_MS = 60 * 1000;
+let cachedEmailRecipients: Array<{ id: string; email: string }> | null = null;
+let cachedEmailRecipientsAt = 0;
+
+async function loadEmailRecipients(): Promise<Array<{ id: string; email: string }>> {
+  const now = Date.now();
+  if (cachedEmailRecipients && now - cachedEmailRecipientsAt < RECIPIENT_CACHE_TTL_MS) {
+    return cachedEmailRecipients;
+  }
+
+  const recipients = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      role: { in: ['admin', 'manager'] },
+    },
+    select: {
+      id: true,
+      email: true,
+      notificationSettings: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const filtered = recipients.filter((user) => {
+    const settings = resolveUserNotificationSettings(user.notificationSettings);
+    return settings.emailAlertsEnabled;
+  });
+
+  cachedEmailRecipients = filtered.map((user) => ({ id: user.id, email: user.email }));
+  cachedEmailRecipientsAt = now;
+  return cachedEmailRecipients;
+}
+
+function getSeverityLabel(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return 'Kritisch';
+    case 'warning':
+      return 'Warnung';
+    default:
+      return 'Info';
+  }
+}
 
 /**
  * Outbox event types and their handlers.
@@ -70,36 +116,77 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
     const severity = event.payload['severity'] as string;
     const message = event.payload['message'] as string;
 
-    // Only create alerts for warning and critical severity
-    if (severity !== 'warning' && severity !== 'critical') {
+    const alertSettings = await loadAlertSettings();
+
+    if (!shouldNotifySeverity(alertSettings, severity)) {
       return;
     }
 
-    // Get users to notify (for now, just the first admin user)
-    // TODO: Implement proper notification preferences
-    const users = await prisma.user.findMany({
-      where: {
-        isActive: true,
-        role: { in: ['admin', 'manager'] },
-      },
-      take: 5,
-    });
+    const channels: Array<'email' | 'slack' | 'teams'> = [];
+    let emailRecipients: Array<{ id: string; email: string }> = [];
+    let emailRecipientList = '';
 
-    for (const user of users) {
-      // Create alert record
+    if (alertSettings.emailEnabled) {
+      emailRecipients = await loadEmailRecipients();
+
+      if (emailRecipients.length > 0) {
+        emailRecipientList = emailRecipients.map((user) => user.email).join(', ');
+        channels.push('email');
+      }
+    }
+
+    const slackWebhookUrl = alertSettings.slackWebhookUrl.trim();
+    if (alertSettings.slackEnabled && slackWebhookUrl) {
+      channels.push('slack');
+    }
+
+    const teamsWebhookUrl = alertSettings.teamsWebhookUrl.trim();
+    if (alertSettings.teamsEnabled && teamsWebhookUrl) {
+      channels.push('teams');
+    }
+
+    if (channels.length === 0) {
+      return;
+    }
+
+    const existingAlerts = await prisma.alert.findMany({
+      where: {
+        anomalyId,
+        channel: { in: channels },
+      },
+      select: { channel: true },
+    });
+    const existingChannels = new Set(existingAlerts.map((alert) => alert.channel));
+
+    for (const channel of channels) {
+      if (existingChannels.has(channel)) {
+        continue;
+      }
+
+      const recipient = channel === 'email'
+        ? emailRecipientList
+        : channel === 'slack'
+          ? slackWebhookUrl
+          : teamsWebhookUrl;
+
+      if (!recipient) {
+        continue;
+      }
+
       const alert = await prisma.alert.create({
         data: {
           anomalyId,
-          userId: user.id,
-          channel: 'email',
-          recipient: user.email,
-          subject: `[${severity === 'critical' ? 'Kritisch' : 'Warnung'}] Kostenanomalie: ${message}`,
+          userId: channel === 'email' && emailRecipients.length === 1
+            ? emailRecipients[0].id
+            : null,
+          channel,
+          recipient,
+          subject: `[${getSeverityLabel(severity)}] Kostenanomalie: ${message}`,
           body: message,
           status: 'pending',
         },
       });
 
-      // Queue alert for sending
       await queueAlert(
         {
           alertId: alert.id,
