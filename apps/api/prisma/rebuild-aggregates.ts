@@ -3,11 +3,11 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🔄 Rebuilding monthly aggregates from cost records...\n');
+  console.log('Rebuilding monthly aggregates from cost records...\n');
 
   // Clear existing aggregates
   await prisma.costRecordMonthlyAgg.deleteMany();
-  console.log('✅ Cleared existing aggregates');
+  console.log('Cleared existing aggregates');
 
   // Get all cost records grouped by year, month, location, supplier, costType
   const costRecords = await prisma.costRecord.findMany({
@@ -22,20 +22,23 @@ async function main() {
     },
   });
 
-  console.log(`📊 Processing ${costRecords.length} cost records...`);
+  console.log(`Processing ${costRecords.length} cost records...`);
 
   // Group by composite key
-  const aggregates = new Map<string, {
-    year: number;
-    month: number;
-    locationId: string | null;
-    supplierId: string | null;
-    costType: string | null;
-    amountSum: number;
-    amountNetSum: number;
-    quantitySum: number;
-    recordCount: number;
-  }>();
+  const aggregates = new Map<
+    string,
+    {
+      year: number;
+      month: number;
+      locationId: string | null;
+      supplierId: string | null;
+      costType: string | null;
+      amountSum: number;
+      amountNetSum: number;
+      quantitySum: number;
+      recordCount: number;
+    }
+  >();
 
   for (const record of costRecords) {
     const year = record.periodStart.getFullYear();
@@ -64,23 +67,25 @@ async function main() {
   }
 
   // Insert aggregates
-  const aggData: Prisma.CostRecordMonthlyAggCreateManyInput[] = Array.from(aggregates.values()).map(agg => ({
-    year: agg.year,
-    month: agg.month,
-    locationId: agg.locationId,
-    supplierId: agg.supplierId,
-    costType: agg.costType,
-    amountSum: new Prisma.Decimal(agg.amountSum.toFixed(4)),
-    amountNetSum: new Prisma.Decimal(agg.amountNetSum.toFixed(4)),
-    quantitySum: new Prisma.Decimal(agg.quantitySum.toFixed(4)),
-    recordCount: agg.recordCount,
-  }));
+  const aggData: Prisma.CostRecordMonthlyAggCreateManyInput[] = Array.from(aggregates.values()).map(
+    (agg) => ({
+      year: agg.year,
+      month: agg.month,
+      locationId: agg.locationId,
+      supplierId: agg.supplierId,
+      costType: agg.costType,
+      amountSum: new Prisma.Decimal(agg.amountSum.toFixed(4)),
+      amountNetSum: new Prisma.Decimal(agg.amountNetSum.toFixed(4)),
+      quantitySum: new Prisma.Decimal(agg.quantitySum.toFixed(4)),
+      recordCount: agg.recordCount,
+    }),
+  );
 
   await prisma.costRecordMonthlyAgg.createMany({
     data: aggData,
   });
 
-  console.log(`✅ Created ${aggData.length} monthly aggregates`);
+  console.log(`Created ${aggData.length} monthly aggregates`);
 
   // Show summary
   const summary = await prisma.costRecordMonthlyAgg.aggregate({
@@ -88,9 +93,11 @@ async function main() {
     _count: true,
   });
 
-  console.log('\n📈 Summary:');
+  console.log('\nSummary:');
   console.log(`   Total aggregates: ${summary._count}`);
-  console.log(`   Total amount: €${Number(summary._sum.amountSum || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}`);
+  console.log(
+    `   Total amount: €${Number(summary._sum.amountSum || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}`,
+  );
   console.log(`   Total records: ${summary._sum.recordCount}`);
 
   // Show by year
@@ -100,12 +107,14 @@ async function main() {
     orderBy: { year: 'desc' },
   });
 
-  console.log('\n📅 By Year:');
+  console.log('\nBy Year:');
   for (const y of byYear) {
-    console.log(`   ${y.year}: €${Number(y._sum.amountSum || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}`);
+    console.log(
+      `   ${y.year}: €${Number(y._sum.amountSum || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}`,
+    );
   }
 
-  console.log('\n🎉 Aggregates rebuilt successfully!');
+  console.log('\nAggregates rebuilt successfully!');
 }
 
 main()

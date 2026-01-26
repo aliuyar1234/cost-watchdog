@@ -1,11 +1,6 @@
 import type { ExtractedCostRecord } from '@cost-watchdog/connector-sdk';
 import type { PageText } from '../text-extractor.js';
-import {
-  extractPattern,
-  patterns,
-  parseGermanNumber,
-  parseGermanDate,
-} from '../text-extractor.js';
+import { extractPattern, patterns, parseGermanNumber, parseGermanDate } from '../text-extractor.js';
 
 /**
  * Template extraction function type.
@@ -57,7 +52,10 @@ export function listTemplates(): string[] {
  * Generic utility invoice extractor.
  * Works for most German utility invoices with standard format.
  */
-export function extractGenericUtility(pages: PageText[], fullText: string): TemplateExtractionResult {
+export function extractGenericUtility(
+  pages: PageText[],
+  fullText: string,
+): TemplateExtractionResult {
   const warnings: string[] = [];
   const record: Partial<ExtractedCostRecord> = {
     currency: 'EUR',
@@ -77,7 +75,7 @@ export function extractGenericUtility(pages: PageText[], fullText: string): Temp
   const periodMatches = fullText.match(patterns.period);
   if (periodMatches) {
     const periodMatch = periodMatches[0].match(
-      /(\d{1,2}[./-]\d{1,2}[./-]\d{4})\s*[-–bis]\s*(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i
+      /(\d{1,2}[./-]\d{1,2}[./-]\d{4})\s*[-–bis]\s*(\d{1,2}[./-]\d{1,2}[./-]\d{4})/i,
     );
     if (periodMatch && periodMatch[1] && periodMatch[2]) {
       const start = parseGermanDate(periodMatch[1]);
@@ -143,8 +141,7 @@ export function extractGenericUtility(pages: PageText[], fullText: string): Temp
   }
 
   // Extract net amount and VAT
-  const netPattern =
-    /(?:Netto|Net)[:\s]*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))\s*(?:EUR|€)?/gi;
+  const netPattern = /(?:Netto|Net)[:\s]*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2}))\s*(?:EUR|€)?/gi;
   const netMatch = fullText.match(netPattern);
   if (netMatch) {
     const netStr = netMatch[0];
@@ -158,8 +155,10 @@ export function extractGenericUtility(pages: PageText[], fullText: string): Temp
         // Round to common VAT rates
         if (Math.abs(vatRate - 19) < 2) record.vatRate = 19;
         else if (Math.abs(vatRate - 7) < 1) record.vatRate = 7;
-        else if (Math.abs(vatRate - 20) < 2) record.vatRate = 20; // Austria
-        else if (Math.abs(vatRate - 8.1) < 1) record.vatRate = 8.1; // Switzerland
+        else if (Math.abs(vatRate - 20) < 2)
+          record.vatRate = 20; // Austria
+        else if (Math.abs(vatRate - 8.1) < 1)
+          record.vatRate = 8.1; // Switzerland
         else record.vatRate = Math.round(vatRate * 10) / 10;
       }
     }
@@ -243,7 +242,7 @@ function extractEonStandard(pages: PageText[], fullText: string): TemplateExtrac
 
     // E.ON specific: Look for "Verbrauch" section
     const verbrauchMatch = fullText.match(
-      /Verbrauch[:\s]*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s*kWh/i
+      /Verbrauch[:\s]*(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?)\s*kWh/i,
     );
     if (verbrauchMatch && verbrauchMatch[1]) {
       record.quantity = parseGermanNumber(verbrauchMatch[1]);
@@ -287,7 +286,7 @@ function extractTelekomStandard(pages: PageText[], fullText: string): TemplateEx
 
   // Telekom period format: "Abrechnungszeitraum: 01.01.2024 - 31.01.2024"
   const periodMatch = fullText.match(
-    /Abrechnungszeitraum[:\s]*(\d{2}\.\d{2}\.\d{4})\s*[-–]\s*(\d{2}\.\d{2}\.\d{4})/i
+    /Abrechnungszeitraum[:\s]*(\d{2}\.\d{2}\.\d{4})\s*[-–]\s*(\d{2}\.\d{2}\.\d{4})/i,
   );
   if (periodMatch && periodMatch[1] && periodMatch[2]) {
     record.periodStart = parseGermanDate(periodMatch[1]) || undefined;
@@ -296,7 +295,7 @@ function extractTelekomStandard(pages: PageText[], fullText: string): TemplateEx
 
   // Telekom total amount
   const totalMatch = fullText.match(
-    /(?:Rechnungsbetrag|Gesamtbetrag)[:\s]*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:EUR|€)/i
+    /(?:Rechnungsbetrag|Gesamtbetrag)[:\s]*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:EUR|€)/i,
   );
   if (totalMatch && totalMatch[1]) {
     record.amount = parseGermanNumber(totalMatch[1]);
@@ -338,7 +337,8 @@ function extractTelekomStandard(pages: PageText[], fullText: string): TemplateEx
 registerTemplate('telekom_standard', extractTelekomStandard);
 
 // Register placeholder templates for other suppliers
-const placeholderExtractor: TemplateExtractor = (pages, fullText) => extractGenericUtility(pages, fullText);
+const placeholderExtractor: TemplateExtractor = (pages, fullText) =>
+  extractGenericUtility(pages, fullText);
 
 registerTemplate('vattenfall_standard', placeholderExtractor);
 registerTemplate('rwe_standard', placeholderExtractor);

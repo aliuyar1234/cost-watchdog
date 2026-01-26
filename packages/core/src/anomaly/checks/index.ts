@@ -35,12 +35,12 @@ export const ALL_CHECKS: AnomalyCheck[] = [
  * Get a check by its ID
  */
 export function getCheckById(id: string): AnomalyCheck | undefined {
-  return ALL_CHECKS.find(check => check.id === id);
+  return ALL_CHECKS.find((check) => check.id === id);
 }
 
 /**
  * Get all check IDs
  */
 export function getAllCheckIds(): string[] {
-  return ALL_CHECKS.map(check => check.id);
+  return ALL_CHECKS.map((check) => check.id);
 }

@@ -26,27 +26,10 @@ describe('DailyDigestWorker', () => {
   const sendSlackMock = vi.mocked(sendSlackDailyDigest);
   const sendTeamsMock = vi.mocked(sendTeamsDailyDigest);
 
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date(2024, 1, 2, 8, 30, 0));
-    vi.clearAllMocks();
-    clearAlertSettingsCache();
-    clearAppTimezoneCache();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('sends daily digest email and records delivery', async () => {
-    emailConfiguredMock.mockReturnValue(true);
-    sendEmailMock.mockResolvedValue({ success: true, messageId: 'digest-1' });
-    sendSlackMock.mockResolvedValue({ success: true });
-    sendTeamsMock.mockResolvedValue({ success: true });
-
+  async function seedDigestFixture(adminEmail: string) {
     const admin = await prisma.user.create({
       data: {
-        email: 'digest-admin@test.com',
+        email: adminEmail,
         passwordHash: 'placeholder',
         firstName: 'Digest',
         lastName: 'Admin',
@@ -141,6 +124,29 @@ describe('DailyDigestWorker', () => {
       },
     });
 
+    return admin;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2024, 1, 2, 8, 30, 0));
+    vi.clearAllMocks();
+    clearAlertSettingsCache();
+    clearAppTimezoneCache();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('sends daily digest email and records delivery', async () => {
+    emailConfiguredMock.mockReturnValue(true);
+    sendEmailMock.mockResolvedValue({ success: true, messageId: 'digest-1' });
+    sendSlackMock.mockResolvedValue({ success: true });
+    sendTeamsMock.mockResolvedValue({ success: true });
+
+    const admin = await seedDigestFixture('digest-admin@test.com');
+
     const worker = createDailyDigestWorker({
       pollIntervalMs: 60000,
       runOnStartup: true,
@@ -159,6 +165,78 @@ describe('DailyDigestWorker', () => {
 
     expect(digest).toBeTruthy();
     expect(digest?.status).toBe('sent');
+  });
+
+  it('does not send duplicate digests for the same window and recipient', async () => {
+    emailConfiguredMock.mockReturnValue(true);
+    sendEmailMock.mockResolvedValue({ success: true, messageId: 'digest-dupe' });
+
+    const admin = await seedDigestFixture('digest-dupe-admin@test.com');
+
+    const worker1 = createDailyDigestWorker({
+      pollIntervalMs: 60000,
+      runOnStartup: true,
+    });
+    await worker1.start();
+    worker1.stop();
+
+    const worker2 = createDailyDigestWorker({
+      pollIntervalMs: 60000,
+      runOnStartup: true,
+    });
+    await worker2.start();
+    worker2.stop();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+
+    const digests = await prisma.dailyDigest.findMany({
+      where: { recipient: admin.email, channel: 'email' },
+    });
+    expect(digests).toHaveLength(1);
+    expect(digests[0]?.status).toBe('sent');
+    expect(digests[0]?.attempts).toBe(1);
+  });
+
+  it('retries failed digests until sent (up to maxAttempts)', async () => {
+    emailConfiguredMock.mockReturnValue(true);
+    sendEmailMock
+      .mockResolvedValueOnce({ success: false, error: 'smtp down' })
+      .mockResolvedValueOnce({ success: true, messageId: 'digest-retry' });
+
+    const admin = await seedDigestFixture('digest-retry-admin@test.com');
+
+    const worker1 = createDailyDigestWorker({
+      pollIntervalMs: 60000,
+      runOnStartup: true,
+      maxAttempts: 2,
+    });
+    await worker1.start();
+    worker1.stop();
+
+    const worker2 = createDailyDigestWorker({
+      pollIntervalMs: 60000,
+      runOnStartup: true,
+      maxAttempts: 2,
+    });
+    await worker2.start();
+    worker2.stop();
+
+    const worker3 = createDailyDigestWorker({
+      pollIntervalMs: 60000,
+      runOnStartup: true,
+      maxAttempts: 2,
+    });
+    await worker3.start();
+    worker3.stop();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(2);
+
+    const digest = await prisma.dailyDigest.findFirst({
+      where: { recipient: admin.email, channel: 'email' },
+    });
+    expect(digest).toBeTruthy();
+    expect(digest?.status).toBe('sent');
+    expect(digest?.attempts).toBe(2);
   });
 
   it('respects app timezone when scheduling', async () => {

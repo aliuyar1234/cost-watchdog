@@ -64,7 +64,7 @@ describe('Export Routes', () => {
         locationId: location.id,
         periodStart: new Date('2024-01-01'),
         periodEnd: new Date('2024-01-31'),
-        amount: 1500.50,
+        amount: 1500.5,
         amountNet: 1261.34,
         vatAmount: 239.16,
         quantity: 5000,
@@ -96,7 +96,7 @@ describe('Export Routes', () => {
         costType: 'electricity',
         locationId: location.id,
         supplierId: supplier.id,
-        amountSum: 1500.50,
+        amountSum: 1500.5,
         recordCount: 1,
       },
     });

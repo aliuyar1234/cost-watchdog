@@ -132,15 +132,13 @@ async function main(): Promise<void> {
                   const newVersion = getKeyVersion(newValue);
                   updates[field] = newValue;
                   needsUpdate = true;
-                  console.log(
-                    `    Record ${record.id}: ${field} v${oldVersion} -> v${newVersion}`
-                  );
+                  console.log(`    Record ${record.id}: ${field} v${oldVersion} -> v${newVersion}`);
                 }
               } catch (error) {
                 totalErrors++;
                 console.error(
                   `    ERROR: Record ${record.id}, field ${field}:`,
-                  error instanceof Error ? error.message : error
+                  error instanceof Error ? error.message : error,
                 );
               }
             }
@@ -157,7 +155,7 @@ async function main(): Promise<void> {
               totalErrors++;
               console.error(
                 `    ERROR: Failed to update record ${record.id}:`,
-                error instanceof Error ? error.message : error
+                error instanceof Error ? error.message : error,
               );
             }
           } else if (needsUpdate) {
@@ -190,7 +188,6 @@ async function main(): Promise<void> {
     } else {
       console.log('  KEY ROTATION COMPLETE');
     }
-
   } catch (error) {
     console.error('Fatal error:', error);
     process.exit(1);

@@ -8,9 +8,14 @@ import { authenticate } from '../middleware/auth.js';
 import { requireScope } from '../lib/api-key-scopes.js';
 import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
 import { secrets } from '../lib/secrets.js';
+import { TtlCache } from '../lib/ttl-cache.js';
 
 // Maximum limit for list queries
 const MAX_LIMIT = 100;
+
+const ALERT_STATS_CACHE_TTL_MS = 30 * 1000;
+const ALERT_STATS_CACHE_CONTROL = 'private, max-age=30';
+const alertStatsCache = new TtlCache<unknown>(ALERT_STATS_CACHE_TTL_MS, 200);
 
 // Secret for HMAC token generation (read from Docker secrets or AUTH_SECRET env)
 // In production, this MUST be set - no fallback to prevent token forgery
@@ -21,7 +26,9 @@ if (!ALERT_TOKEN_SECRET) {
   if (IS_PRODUCTION) {
     throw new Error('FATAL: AUTH_SECRET is required for alert token generation in production');
   }
-  console.warn('[Alerts] WARNING: AUTH_SECRET not set. Using insecure default for development only.');
+  console.warn(
+    '[Alerts] WARNING: AUTH_SECRET not set. Using insecure default for development only.',
+  );
 }
 
 // Use the secret or a dev-only fallback (never in production)
@@ -83,6 +90,13 @@ interface AlertResponse {
   createdAt: string;
 }
 
+async function getAlertAccessFilter(userId: string): Promise<Record<string, unknown>> {
+  const restrictions = await getUserRestrictions(userId);
+  return restrictions.hasRestrictions
+    ? { anomaly: { costRecord: buildAccessFilter(restrictions) } }
+    : {};
+}
+
 /**
  * Alert routes
  */
@@ -94,7 +108,10 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
       return;
     }
     // Cast to async function type - Fastify supports async hooks without done callback
-    await (authenticate as (req: typeof request, rep: typeof reply) => Promise<void>)(request, reply);
+    await (authenticate as (req: typeof request, rep: typeof reply) => Promise<void>)(
+      request,
+      reply,
+    );
     const isReadMethod = ['GET', 'HEAD', 'OPTIONS'].includes(request.method.toUpperCase());
     const requiredScope = isReadMethod ? 'read:alerts' : 'write:alerts';
     await requireScope(requiredScope)(request, reply);
@@ -103,51 +120,49 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /alerts - List alerts
    */
-  fastify.get<{ Querystring: AlertQuery }>(
-    '/',
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.get<{ Querystring: AlertQuery }>('/', async (request, reply) => {
+    const user = request.user!;
 
-      const query = request.query as AlertQuery;
-      const limit = Math.min(query.limit ?? 20, MAX_LIMIT);
-      const offset = query.offset ?? 0;
+    const accessFilter = await getAlertAccessFilter(user.sub);
+    const query = request.query as AlertQuery;
+    const limit = Math.min(query.limit ?? 20, MAX_LIMIT);
+    const offset = query.offset ?? 0;
 
-      const where: Record<string, unknown> = {};
-      if (query.status) where['status'] = query.status;
-      if (query.channel) where['channel'] = query.channel;
-      if (query.anomalyId) where['anomalyId'] = query.anomalyId;
+    const where: Record<string, unknown> = { ...accessFilter };
+    if (query.status) where['status'] = query.status;
+    if (query.channel) where['channel'] = query.channel;
+    if (query.anomalyId) where['anomalyId'] = query.anomalyId;
 
-      const [data, total] = await Promise.all([
-        prisma.alert.findMany({
-          where,
-          include: {
-            anomaly: {
-              select: {
-                id: true,
-                type: true,
-                severity: true,
-                message: true,
-              },
+    const [data, total] = await Promise.all([
+      prisma.alert.findMany({
+        where,
+        include: {
+          anomaly: {
+            select: {
+              id: true,
+              type: true,
+              severity: true,
+              message: true,
             },
           },
-          orderBy: { createdAt: 'desc' },
-          take: limit,
-          skip: offset,
-        }),
-        prisma.alert.count({ where }),
-      ]);
-
-      return reply.send({
-        data: data.map(formatAlert),
-        pagination: {
-          total,
-          limit,
-          offset,
-          hasMore: offset + data.length < total,
         },
-      });
-    }
-  );
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.alert.count({ where }),
+    ]);
+
+    return reply.send({
+      data: data.map(formatAlert),
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
+      },
+    });
+  });
 
   /**
    * GET /alerts/stats
@@ -155,11 +170,15 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/stats', async (request, reply) => {
     const user = request.user!;
 
+    const cacheKey = `alerts:stats:${user.sub}`;
+    const cached = alertStatsCache.get(cacheKey);
+    if (cached) {
+      reply.header('Cache-Control', ALERT_STATS_CACHE_CONTROL);
+      return reply.send(cached);
+    }
+
     // Get user's access restrictions and build filter for alerts via anomaly -> costRecord
-    const restrictions = await getUserRestrictions(user.sub);
-    const accessFilter: Record<string, unknown> = restrictions.hasRestrictions
-      ? { anomaly: { costRecord: buildAccessFilter(restrictions) } }
-      : {};
+    const accessFilter = await getAlertAccessFilter(user.sub);
 
     const [byStatus, byChannel, last24h, last7d] = await Promise.all([
       prisma.alert.groupBy({
@@ -190,57 +209,65 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      byStatus: byStatus.reduce((acc, item) => {
-        acc[item.status] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      byChannel: byChannel.reduce((acc, item) => {
-        acc[item.channel] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
+    const payload = {
+      byStatus: byStatus.reduce(
+        (acc, item) => {
+          acc[item.status] = item._count;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
+      byChannel: byChannel.reduce(
+        (acc, item) => {
+          acc[item.channel] = item._count;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
       last24h,
       last7d,
-    });
+    };
+
+    alertStatsCache.set(cacheKey, payload);
+    reply.header('Cache-Control', ALERT_STATS_CACHE_CONTROL);
+    return reply.send(payload);
   });
 
   /**
    * GET /alerts/:id
    */
-  fastify.get<{ Params: AlertIdParams }>(
-    '/:id',
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.get<{ Params: AlertIdParams }>('/:id', async (request, reply) => {
+    const user = request.user!;
 
-      const { id } = request.params;
+    const { id } = request.params;
 
-      if (!isValidUUID(id)) {
-        return sendNotFound(reply, 'Alert');
-      }
+    if (!isValidUUID(id)) {
+      return sendNotFound(reply, 'Alert');
+    }
 
-      const alert = await prisma.alert.findUnique({
-        where: { id },
-        include: {
-          anomaly: {
-            include: {
-              costRecord: {
-                include: {
-                  location: true,
-                  supplier: true,
-                },
+    const accessFilter = await getAlertAccessFilter(user.sub);
+    const alert = await prisma.alert.findFirst({
+      where: { id, ...accessFilter },
+      include: {
+        anomaly: {
+          include: {
+            costRecord: {
+              include: {
+                location: true,
+                supplier: true,
               },
             },
           },
         },
-      });
+      },
+    });
 
-      if (!alert) {
-        return sendNotFound(reply, 'Alert');
-      }
-
-      return reply.send(formatAlert(alert));
+    if (!alert) {
+      return sendNotFound(reply, 'Alert');
     }
-  );
+
+    return reply.send(formatAlert(alert));
+  });
 
   /**
    * POST /alerts/:id/track-click
@@ -278,52 +305,50 @@ export const alertRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send({ success: true });
-    }
+    },
   );
 
   /**
    * POST /alerts/:id/retry
    */
-  fastify.post<{ Params: AlertIdParams }>(
-    '/:id/retry',
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.post<{ Params: AlertIdParams }>('/:id/retry', async (request, reply) => {
+    const user = request.user!;
 
-      const { id } = request.params;
+    const { id } = request.params;
 
-      if (!isValidUUID(id)) {
-        return sendNotFound(reply, 'Alert');
-      }
-
-      const existing = await prisma.alert.findUnique({ where: { id } });
-      if (!existing) {
-        return sendNotFound(reply, 'Alert');
-      }
-
-      if (existing.status !== 'failed') {
-        return sendBadRequest(reply, 'Only failed alerts can be retried');
-      }
-
-      const alert = await prisma.alert.update({
-        where: { id },
-        data: {
-          status: 'pending',
-          errorMessage: null,
-        },
-      });
-
-      await prisma.outboxEvent.create({
-        data: {
-          eventType: 'alert.retry',
-          aggregateType: 'alert',
-          aggregateId: id,
-          payload: { alertId: id },
-        },
-      });
-
-      return reply.send(formatAlert(alert));
+    if (!isValidUUID(id)) {
+      return sendNotFound(reply, 'Alert');
     }
-  );
+
+    const accessFilter = await getAlertAccessFilter(user.sub);
+    const existing = await prisma.alert.findFirst({ where: { id, ...accessFilter } });
+    if (!existing) {
+      return sendNotFound(reply, 'Alert');
+    }
+
+    if (existing.status !== 'failed') {
+      return sendBadRequest(reply, 'Only failed alerts can be retried');
+    }
+
+    const alert = await prisma.alert.update({
+      where: { id },
+      data: {
+        status: 'pending',
+        errorMessage: null,
+      },
+    });
+
+    await prisma.outboxEvent.create({
+      data: {
+        eventType: 'alert.retry',
+        aggregateType: 'alert',
+        aggregateId: id,
+        payload: { alertId: id },
+      },
+    });
+
+    return reply.send(formatAlert(alert));
+  });
 };
 
 function formatAlert(alert: Alert & { anomaly?: unknown }): AlertResponse & { anomaly?: unknown } {

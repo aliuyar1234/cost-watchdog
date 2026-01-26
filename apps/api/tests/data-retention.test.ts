@@ -13,10 +13,7 @@ import {
   getRetentionConfig,
   getRetentionStats,
 } from '../src/lib/data-retention.js';
-import {
-  RetentionWorker,
-  createRetentionWorker,
-} from '../src/workers/retention.worker.js';
+import { RetentionWorker, createRetentionWorker } from '../src/workers/retention.worker.js';
 
 // Test user for creating related data
 let testUserId: string;
@@ -566,9 +563,7 @@ describe('Data Retention', () => {
       expect(result.archivedCount).toBeGreaterThanOrEqual(1);
 
       // Check that archive log was created
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[DataRetention] Archived')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[DataRetention] Archived'));
 
       consoleSpy.mockRestore();
     });
@@ -686,7 +681,7 @@ describe('Retention Worker', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[RetentionWorker] Running initial cleanup')
+        expect.stringContaining('[RetentionWorker] Running initial cleanup'),
       );
 
       worker.stop();
@@ -704,7 +699,7 @@ describe('Retention Worker', () => {
       await worker.triggerCleanup();
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[RetentionWorker] Starting cleanup run')
+        expect.stringContaining('[RetentionWorker] Starting cleanup run'),
       );
 
       consoleSpy.mockRestore();

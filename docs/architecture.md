@@ -2,14 +2,14 @@
 
 ### 3.1 Architektur-Prinzipien
 
-| Prinzip | Umsetzung |
-|---------|-----------|
-| **Modularität** | Jede Funktion ist ein eigenständiges Modul mit definierter Schnittstelle |
-| **Plugin-Architektur** | Neue Datenquellen = neuer Connector, keine Core-Änderung |
-| **Event-Driven** | Asynchrone Verarbeitung über Message Queue |
-| **Audit-First** | Jede Datenänderung wird geloggt, bevor sie passiert |
-| **Multi-Tenant by Design** | Tenant-Isolation von Tag 1, Row-Level Security auf DB-Ebene |
-| **API-First** | Jede Funktion ist über API erreichbar, UI ist nur ein Client |
+| Prinzip                    | Umsetzung                                                                |
+| -------------------------- | ------------------------------------------------------------------------ |
+| **Modularität**            | Jede Funktion ist ein eigenständiges Modul mit definierter Schnittstelle |
+| **Plugin-Architektur**     | Neue Datenquellen = neuer Connector, keine Core-Änderung                 |
+| **Event-Driven**           | Asynchrone Verarbeitung über Message Queue                               |
+| **Audit-First**            | Jede Datenänderung wird geloggt, bevor sie passiert                      |
+| **Multi-Tenant by Design** | Tenant-Isolation von Tag 1, Row-Level Security auf DB-Ebene              |
+| **API-First**              | Jede Funktion ist über API erreichbar, UI ist nur ein Client             |
 
 ### 3.2 High-Level Architektur
 
@@ -122,33 +122,33 @@
 interface Connector {
   /** Eindeutige ID des Connectors */
   id: string;
-  
+
   /** Anzeigename */
   name: string;
-  
+
   /** Connector-Typ */
   type: 'file' | 'api' | 'manual' | 'iot' | 'email';
-  
+
   /** Welche Kostenarten dieser Connector liefern kann */
   supportedCostTypes: CostType[];
-  
+
   /** Version für Kompatibilität */
   version: string;
-  
+
   /** Connector-spezifische Konfiguration */
   configSchema: JSONSchema;
-  
+
   /**
    * Extrahiert Kostendaten aus der Quelle.
    * @returns Standardisierte CostRecord[]
    */
   extract(input: ConnectorInput): Promise<ExtractionResult>;
-  
+
   /**
    * Validiert die Konfiguration.
    */
   validateConfig(config: unknown): ValidationResult;
-  
+
   /**
    * Prüft ob Verbindung zur Quelle funktioniert.
    */
@@ -164,14 +164,14 @@ interface ExtractionResult {
   metadata: {
     sourceType: string;
     extractionTimestamp: Date;
-    confidence: number;  // 0-1
+    confidence: number; // 0-1
     warnings: string[];
-    rawData?: unknown;   // Für Debugging
+    rawData?: unknown; // Für Debugging
   };
   audit: {
     connectorId: string;
     connectorVersion: string;
-    inputHash: string;   // Hash der Eingabedaten
+    inputHash: string; // Hash der Eingabedaten
     // LLM-Audit-Felder (ChatGPT-Feedback)
     llmModel?: string;
     llmPromptVersion?: string;
@@ -185,57 +185,58 @@ interface ExtractionResult {
  */
 interface CostRecord {
   // Identifikation
-  externalId?: string;           // ID aus Quellsystem (Rechnungsnummer)
-  
+  externalId?: string; // ID aus Quellsystem (Rechnungsnummer)
+
   // Zeitraum
   periodStart: Date;
   periodEnd: Date;
   invoiceDate?: Date;
   dueDate?: Date;
-  
+
   // Kosten
   amount: number;
-  currency: string;              // ISO 4217
-  amountNet?: number;            // Netto (ohne MwSt)
+  currency: string; // ISO 4217
+  amountNet?: number; // Netto (ohne MwSt)
   vatAmount?: number;
   vatRate?: number;
-  
+
   // Verbrauch (wenn relevant)
   quantity?: number;
-  unit?: ConsumptionUnit;        // kWh, m³, Liter, Stück
-  pricePerUnit?: number;         // €/kWh, €/m³, etc.
-  
+  unit?: ConsumptionUnit; // kWh, m³, Liter, Stück
+  pricePerUnit?: number; // €/kWh, €/m³, etc.
+
   // Klassifikation
   costType: CostType;
-  costCategory?: string;         // Feinere Kategorisierung
-  
+  costCategory?: string; // Feinere Kategorisierung
+
   // Quelle
-  sourceDocumentId?: string;     // Verknüpfung zum Originaldokument
-  sourceLocation?: {             // Wo im Dokument
+  sourceDocumentId?: string; // Verknüpfung zum Originaldokument
+  sourceLocation?: {
+    // Wo im Dokument
     page?: number;
     coordinates?: BoundingBox;
     rawText?: string;
   };
-  
+
   // Lieferant
   supplier: {
     name: string;
-    supplierId?: string;         // Interne ID
-    taxId?: string;              // UID-Nummer
+    supplierId?: string; // Interne ID
+    taxId?: string; // UID-Nummer
   };
-  
+
   // Zuordnung
   locationId?: string;
   costCenterId?: string;
   contractId?: string;
-  
+
   // Metadaten
   meterNumber?: string;
   contractNumber?: string;
   customerNumber?: string;
-  
+
   // Qualität
-  confidence: number;            // 0-1, wie sicher ist die Extraktion
+  confidence: number; // 0-1, wie sicher ist die Extraktion
   manuallyVerified: boolean;
   extractionMethod: 'template' | 'llm' | 'manual' | 'api';
 }
@@ -403,25 +404,29 @@ export const supplierTemplates: SupplierTemplate[] = [
   { id: 'wien_energie', patterns: ['Wien Energie', 'ATU16346809'], parser: wienEnergieParser },
   { id: 'evn', patterns: ['EVN Energievertrieb', 'ATU15766402'], parser: evnParser },
   { id: 'verbund', patterns: ['VERBUND', 'ATU14703908'], parser: verbundParser },
-  { id: 'energie_steiermark', patterns: ['Energie Steiermark', 'ATU37009307'], parser: energieSteiermarkParser },
+  {
+    id: 'energie_steiermark',
+    patterns: ['Energie Steiermark', 'ATU37009307'],
+    parser: energieSteiermarkParser,
+  },
   { id: 'kelag', patterns: ['KELAG', 'ATU26aboratory404'], parser: kelagParser },
-  
-  // Strom - Deutschland  
+
+  // Strom - Deutschland
   { id: 'eon', patterns: ['E.ON Energie', 'DE811182998'], parser: eonParser },
   { id: 'enbw', patterns: ['EnBW', 'DE812276032'], parser: enbwParser },
   { id: 'rwe', patterns: ['RWE', 'DE811184594'], parser: rweParser },
   { id: 'vattenfall', patterns: ['Vattenfall', 'DE118702827'], parser: vattenfallParser },
   { id: 'stadtwerke_muenchen', patterns: ['Stadtwerke München', 'DE129521671'], parser: swmParser },
-  
+
   // Gas/Fernwärme
   { id: 'wien_energie_gas', patterns: ['Wien Energie', 'Erdgas'], parser: wienEnergieGasParser },
   { id: 'tigas', patterns: ['TIGAS', 'ATU36782606'], parser: tigasParser },
-  
+
   // Telekom - Österreich
   { id: 'a1', patterns: ['A1 Telekom', 'ATU62895905'], parser: a1Parser },
   { id: 'magenta', patterns: ['Magenta Telekom', 'ATU62159929'], parser: magentaParser },
   { id: 'drei', patterns: ['Drei Austria', 'ATU61347377'], parser: dreiParser },
-  
+
   // Telekom - Deutschland
   { id: 'telekom', patterns: ['Deutsche Telekom', 'DE123475223'], parser: telekomParser },
   { id: 'vodafone', patterns: ['Vodafone', 'DE812381591'], parser: vodafoneParser },
@@ -430,10 +435,9 @@ export const supplierTemplates: SupplierTemplate[] = [
 
 interface SupplierTemplate {
   id: string;
-  patterns: string[];  // Erkennungsmuster (Text oder UID)
+  patterns: string[]; // Erkennungsmuster (Text oder UID)
   parser: (text: string, layout: PDFLayout) => CostRecord;
 }
 ```
 
 ---
-

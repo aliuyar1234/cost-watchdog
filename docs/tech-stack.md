@@ -2,24 +2,24 @@
 
 ### 7.1 Tech Stack
 
-| Komponente | Technologie | Begründung |
-|------------|-------------|------------|
-| **Frontend** | Next.js 14 (App Router) | SSR, API Routes, Vercel-Deployment |
-| **UI Components** | shadcn/ui + Tailwind | Accessible, customizable, modern |
-| **Charts** | Recharts | Einfach, React-native |
-| **State Management** | TanStack Query | Server-State, Caching, Mutations |
-| **Backend** | Node.js + Fastify | Performance, Schema-Validation |
-| **ORM** | Prisma | Type-Safety, Migrations, Multi-DB |
-| **Database** | PostgreSQL + RLS | ACID, JSON-Support, Row-Level Security |
-| **Cache/Queue** | Redis + BullMQ | Events, Job-Queue, Session |
-| **Storage** | S3 / MinIO | Dokumente, GDPR-konform |
-| **PDF Processing** | pdf.js + pdfplumber | Text-Extraktion |
-| **OCR** | Tesseract (nur für Scans) | Open Source, On-Prem möglich |
-| **LLM** | Claude API (primary) / OpenAI (fallback) | Strukturierte Extraktion |
-| **Auth** | Better-Auth + SSO | Modern, SSO-ready |
-| **E-Mail** | Resend | Developer-friendly |
-| **Monitoring** | OpenTelemetry + Sentry | Traces, Metrics, Errors |
-| **Deployment** | Docker + Railway/Fly | EU-Region, Skalierbar |
+| Komponente           | Technologie                              | Begründung                             |
+| -------------------- | ---------------------------------------- | -------------------------------------- |
+| **Frontend**         | Next.js 14 (App Router)                  | SSR, API Routes, Vercel-Deployment     |
+| **UI Components**    | shadcn/ui + Tailwind                     | Accessible, customizable, modern       |
+| **Charts**           | Recharts                                 | Einfach, React-native                  |
+| **State Management** | TanStack Query                           | Server-State, Caching, Mutations       |
+| **Backend**          | Node.js + Fastify                        | Performance, Schema-Validation         |
+| **ORM**              | Prisma                                   | Type-Safety, Migrations, Multi-DB      |
+| **Database**         | PostgreSQL + RLS                         | ACID, JSON-Support, Row-Level Security |
+| **Cache/Queue**      | Redis + BullMQ                           | Events, Job-Queue, Session             |
+| **Storage**          | S3 / MinIO                               | Dokumente, GDPR-konform                |
+| **PDF Processing**   | pdf.js + pdfplumber                      | Text-Extraktion                        |
+| **OCR**              | Tesseract (nur für Scans)                | Open Source, On-Prem möglich           |
+| **LLM**              | Claude API (primary) / OpenAI (fallback) | Strukturierte Extraktion               |
+| **Auth**             | Better-Auth + SSO                        | Modern, SSO-ready                      |
+| **E-Mail**           | Resend                                   | Developer-friendly                     |
+| **Monitoring**       | OpenTelemetry + Sentry                   | Traces, Metrics, Errors                |
+| **Deployment**       | Docker + Railway/Fly                     | EU-Region, Skalierbar                  |
 
 ### 7.2 Monorepo-Struktur
 
@@ -205,4 +205,3 @@
 ```
 
 ---
-

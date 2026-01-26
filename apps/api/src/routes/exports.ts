@@ -4,6 +4,7 @@ import { sendBadRequest } from '../lib/errors.js';
 import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 import { requireScope } from '../lib/api-key-scopes.js';
+import { rateLimitEndpoint } from '../lib/rate-limit.js';
 
 // Maximum records per export request
 const MAX_EXPORT_LIMIT = 1000;
@@ -26,6 +27,7 @@ export const exportRoutes: FastifyPluginAsync = async (fastify) => {
   // Apply auth to all routes
   fastify.addHook('preHandler', authenticate);
   fastify.addHook('preHandler', requireScope('read:exports'));
+  fastify.addHook('preHandler', rateLimitEndpoint('export'));
 
   /**
    * GET /exports/cost-records
@@ -148,120 +150,124 @@ export const exportRoutes: FastifyPluginAsync = async (fastify) => {
         .header('Content-Type', 'text/csv; charset=utf-8')
         .header('Content-Disposition', `attachment; filename="${filename}"`)
         .send(csv);
-    }
+    },
   );
 
   /**
    * GET /exports/anomalies
    * Requires manager or admin role
    */
-  fastify.get<{ Querystring: { status?: string; severity?: string; format?: string; limit?: number; offset?: number } }>(
-    '/anomalies',
-    { preHandler: requireRole('manager', 'admin') },
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.get<{
+    Querystring: {
+      status?: string;
+      severity?: string;
+      format?: string;
+      limit?: number;
+      offset?: number;
+    };
+  }>('/anomalies', { preHandler: requireRole('manager', 'admin') }, async (request, reply) => {
+    const user = request.user!;
 
-      // Get user's access restrictions
-      const restrictions = await getUserRestrictions(user.sub);
-      const accessFilter = buildAccessFilter(restrictions);
+    // Get user's access restrictions
+    const restrictions = await getUserRestrictions(user.sub);
+    const accessFilter = buildAccessFilter(restrictions);
 
-      const { status, severity, format = 'csv' } = request.query;
-      const limit = Math.min(request.query.limit || MAX_EXPORT_LIMIT, MAX_EXPORT_LIMIT);
-      const offset = request.query.offset || 0;
+    const { status, severity, format = 'csv' } = request.query;
+    const limit = Math.min(request.query.limit || MAX_EXPORT_LIMIT, MAX_EXPORT_LIMIT);
+    const offset = request.query.offset || 0;
 
-      // Build where clause with access filtering on related cost record
-      const where: Record<string, unknown> = {};
-      if (status) where['status'] = status;
-      if (severity) where['severity'] = severity;
+    // Build where clause with access filtering on related cost record
+    const where: Record<string, unknown> = {};
+    if (status) where['status'] = status;
+    if (severity) where['severity'] = severity;
 
-      // Apply access filter on cost record if user has restrictions
-      if (restrictions.hasRestrictions) {
-        where['costRecord'] = accessFilter;
-      }
+    // Apply access filter on cost record if user has restrictions
+    if (restrictions.hasRestrictions) {
+      where['costRecord'] = accessFilter;
+    }
 
-      const [anomalies, total] = await Promise.all([
-        prisma.anomaly.findMany({
-          where,
-          include: {
-            costRecord: {
-              include: {
-                location: { select: { name: true } },
-                supplier: { select: { name: true } },
-              },
+    const [anomalies, total] = await Promise.all([
+      prisma.anomaly.findMany({
+        where,
+        include: {
+          costRecord: {
+            include: {
+              location: { select: { name: true } },
+              supplier: { select: { name: true } },
             },
           },
-          orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }],
-          take: limit,
-          skip: offset,
-        }),
-        prisma.anomaly.count({ where }),
-      ]);
+        },
+        orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }],
+        take: limit,
+        skip: offset,
+      }),
+      prisma.anomaly.count({ where }),
+    ]);
 
-      if (format === 'json') {
-        return reply.send({
-          data: anomalies.map((a) => ({
-            id: a.id,
-            type: a.type,
-            severity: a.severity,
-            status: a.status,
-            message: a.message,
-            detectedAt: a.detectedAt.toISOString(),
-            acknowledgedAt: a.acknowledgedAt?.toISOString() || null,
-            costRecordAmount: a.costRecord ? Number(a.costRecord.amount) : null,
-            location: a.costRecord?.location?.name || '',
-            supplier: a.costRecord?.supplier?.name || '',
-          })),
-          pagination: {
-            total,
-            limit,
-            offset,
-            hasMore: offset + anomalies.length < total,
-          },
-          exportedAt: new Date().toISOString(),
-          recordCount: anomalies.length,
-        });
-      }
-
-      const headers = [
-        'ID',
-        'Typ',
-        'Schweregrad',
-        'Status',
-        'Nachricht',
-        'Erkannt am',
-        'Bestätigt am',
-        'Betrag',
-        'Standort',
-        'Lieferant',
-      ];
-
-      const csvRows = [headers.join(';')];
-
-      for (const a of anomalies) {
-        const row = [
-          a.id,
-          a.type,
-          a.severity,
-          a.status,
-          a.message.replace(/"/g, '""'),
-          a.detectedAt.toISOString().split('T')[0],
-          a.acknowledgedAt?.toISOString().split('T')[0] || '',
-          a.costRecord ? Number(a.costRecord.amount).toFixed(2).replace('.', ',') : '',
-          a.costRecord?.location?.name || '',
-          a.costRecord?.supplier?.name || '',
-        ];
-        csvRows.push(row.map((v) => `"${v}"`).join(';'));
-      }
-
-      const csv = '\uFEFF' + csvRows.join('\n');
-      const filename = `anomalien_${new Date().toISOString().split('T')[0]}.csv`;
-
-      return reply
-        .header('Content-Type', 'text/csv; charset=utf-8')
-        .header('Content-Disposition', `attachment; filename="${filename}"`)
-        .send(csv);
+    if (format === 'json') {
+      return reply.send({
+        data: anomalies.map((a) => ({
+          id: a.id,
+          type: a.type,
+          severity: a.severity,
+          status: a.status,
+          message: a.message,
+          detectedAt: a.detectedAt.toISOString(),
+          acknowledgedAt: a.acknowledgedAt?.toISOString() || null,
+          costRecordAmount: a.costRecord ? Number(a.costRecord.amount) : null,
+          location: a.costRecord?.location?.name || '',
+          supplier: a.costRecord?.supplier?.name || '',
+        })),
+        pagination: {
+          total,
+          limit,
+          offset,
+          hasMore: offset + anomalies.length < total,
+        },
+        exportedAt: new Date().toISOString(),
+        recordCount: anomalies.length,
+      });
     }
-  );
+
+    const headers = [
+      'ID',
+      'Typ',
+      'Schweregrad',
+      'Status',
+      'Nachricht',
+      'Erkannt am',
+      'Bestätigt am',
+      'Betrag',
+      'Standort',
+      'Lieferant',
+    ];
+
+    const csvRows = [headers.join(';')];
+
+    for (const a of anomalies) {
+      const row = [
+        a.id,
+        a.type,
+        a.severity,
+        a.status,
+        a.message.replace(/"/g, '""'),
+        a.detectedAt.toISOString().split('T')[0],
+        a.acknowledgedAt?.toISOString().split('T')[0] || '',
+        a.costRecord ? Number(a.costRecord.amount).toFixed(2).replace('.', ',') : '',
+        a.costRecord?.location?.name || '',
+        a.costRecord?.supplier?.name || '',
+      ];
+      csvRows.push(row.map((v) => `"${v}"`).join(';'));
+    }
+
+    const csv = '\uFEFF' + csvRows.join('\n');
+    const filename = `anomalien_${new Date().toISOString().split('T')[0]}.csv`;
+
+    return reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(csv);
+  });
 
   /**
    * GET /exports/monthly-report
@@ -397,7 +403,7 @@ export const exportRoutes: FastifyPluginAsync = async (fastify) => {
           })),
         generatedAt: new Date().toISOString(),
       });
-    }
+    },
   );
 };
 

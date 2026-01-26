@@ -29,7 +29,7 @@ export interface EncryptionConfig {
 
 // Fields to encrypt for each model
 const DEFAULT_ENCRYPTION_CONFIG: EncryptionConfig = {
-  CostRecord: ['invoiceNumber', 'contractNumber'],
+  CostRecord: ['contractNumber', 'customerNumber', 'meterNumber'],
   // Add more models/fields as needed
 };
 
@@ -206,9 +206,7 @@ export const encryptionMiddleware: Prisma.Middleware = async (params, next) => {
 
     // Handle createMany's data array
     if (params.action === 'createMany' && Array.isArray(params.args.data)) {
-      params.args.data = params.args.data.map((item: unknown) =>
-        processInput(modelName, item)
-      );
+      params.args.data = params.args.data.map((item: unknown) => processInput(modelName, item));
     }
   }
 
@@ -216,7 +214,13 @@ export const encryptionMiddleware: Prisma.Middleware = async (params, next) => {
   const result = await next(params);
 
   // Process output for read operations
-  const readOperations = ['findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirstOrThrow', 'findMany'];
+  const readOperations = [
+    'findUnique',
+    'findUniqueOrThrow',
+    'findFirst',
+    'findFirstOrThrow',
+    'findMany',
+  ];
 
   if (readOperations.includes(params.action)) {
     return processResult(modelName, result);
@@ -239,7 +243,7 @@ export const encryptionMiddleware: Prisma.Middleware = async (params, next) => {
  */
 export function recordNeedsReEncryption(
   modelName: string,
-  record: Record<string, unknown>
+  record: Record<string, unknown>,
 ): boolean {
   const encryptedFields = getEncryptedFields(modelName);
 
@@ -258,7 +262,7 @@ export function recordNeedsReEncryption(
  */
 export function reEncryptRecord(
   modelName: string,
-  record: Record<string, unknown>
+  record: Record<string, unknown>,
 ): Record<string, unknown> {
   const encryptedFields = getEncryptedFields(modelName);
   const result = { ...record };
@@ -278,7 +282,7 @@ export function reEncryptRecord(
  */
 export function getModelsWithEncryption(): string[] {
   return Object.keys(encryptionConfig).filter(
-    (model) => (encryptionConfig[model]?.length ?? 0) > 0
+    (model) => (encryptionConfig[model]?.length ?? 0) > 0,
   );
 }
 

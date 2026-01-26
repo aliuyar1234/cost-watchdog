@@ -5,7 +5,11 @@
  * Uses cron-like scheduling to run cleanup tasks periodically.
  */
 
-import { runRetentionCleanup, getRetentionConfig, getRetentionStats } from '../lib/data-retention.js';
+import {
+  runRetentionCleanup,
+  getRetentionConfig,
+  getRetentionStats,
+} from '../lib/data-retention.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -168,7 +172,9 @@ export class RetentionWorker {
     const delay = getNextRunDelay(this.cron);
     const nextRun = new Date(Date.now() + delay);
 
-    console.log(`[RetentionWorker] Next run scheduled for ${nextRun.toISOString()} (in ${Math.round(delay / 1000 / 60)} minutes)`);
+    console.log(
+      `[RetentionWorker] Next run scheduled for ${nextRun.toISOString()} (in ${Math.round(delay / 1000 / 60)} minutes)`,
+    );
 
     this.timer = setTimeout(async () => {
       if (this.isRunning) {

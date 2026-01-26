@@ -1,13 +1,7 @@
 'use client';
 
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  Legend,
-} from 'recharts';
+import { useId } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import type { BreakdownItem } from '../../lib/api';
 import { formatCurrency } from '../../lib/formatting';
 
@@ -56,17 +50,19 @@ const COST_TYPE_LABELS: Record<string, string> = {
 };
 
 export function CostBreakdownChart({ data, type, isLoading }: CostBreakdownChartProps) {
+  const descriptionId = useId();
+
   if (isLoading) {
     return (
-      <div className="h-80 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="flex h-80 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="h-80 flex items-center justify-center text-gray-500">
+      <div className="flex h-80 items-center justify-center text-gray-500">
         Keine Daten verfügbar
       </div>
     );
@@ -91,40 +87,51 @@ export function CostBreakdownChart({ data, type, isLoading }: CostBreakdownChart
     percentage: item.percentage,
   }));
 
+  const dimensionLabel =
+    type === 'costType' ? 'Kostenart' : type === 'location' ? 'Standort' : 'Lieferant';
+  const topItems = [...chartData]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 3)
+    .map((item) => `${item.name} (${item.percentage.toFixed(1)}%)`);
+  const summary = `Kostenaufteilung nach ${dimensionLabel}. Top: ${topItems.join(', ')}.`;
+
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <PieChart>
-        <Pie
-          data={chartData}
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={100}
-          paddingAngle={2}
-          dataKey="value"
-        >
-          {chartData.map((_, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(value: number) => formatCurrency(value)}
-          contentStyle={{
-            backgroundColor: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          }}
-        />
-        <Legend
-          layout="vertical"
-          verticalAlign="middle"
-          align="right"
-          formatter={(value) => (
-            <span className="text-sm text-gray-700">{value}</span>
-          )}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+    <div role="img" aria-label="Kostenaufteilung" aria-describedby={descriptionId}>
+      <p id={descriptionId} className="sr-only">
+        {summary}
+      </p>
+      <ResponsiveContainer width="100%" height={320}>
+        <PieChart>
+          <Pie
+            data={chartData}
+            cx="50%"
+            cy="50%"
+            innerRadius={60}
+            outerRadius={100}
+            paddingAngle={2}
+            dataKey="value"
+          >
+            {chartData.map((_, index) => (
+              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value: number) => formatCurrency(value)}
+            contentStyle={{
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            }}
+          />
+          <Legend
+            layout="vertical"
+            verticalAlign="middle"
+            align="right"
+            formatter={(value) => <span className="text-sm text-gray-700">{value}</span>}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

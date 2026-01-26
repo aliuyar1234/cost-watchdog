@@ -26,7 +26,7 @@ export const duplicateCheck: AnomalyCheck = {
 
   async check(record: CostRecordToCheck, context: CheckContext): Promise<CheckResult> {
     // Find potential duplicates
-    const potentialDuplicates = context.historicalRecords.filter(r => {
+    const potentialDuplicates = context.historicalRecords.filter((r) => {
       // Skip the record itself
       if (r.id === record.id) return false;
 
@@ -48,7 +48,7 @@ export const duplicateCheck: AnomalyCheck = {
     if (potentialDuplicates.length > 0) {
       // Check if any of the duplicates have the same invoice number
       const sameInvoiceNumber = potentialDuplicates.some(
-        d => d.invoiceNumber && record.invoiceNumber && d.invoiceNumber === record.invoiceNumber
+        (d) => d.invoiceNumber && record.invoiceNumber && d.invoiceNumber === record.invoiceNumber,
       );
 
       const severity = sameInvoiceNumber ? 'critical' : 'warning';
@@ -60,13 +60,14 @@ export const duplicateCheck: AnomalyCheck = {
           ? `Rechnung mit gleicher Rechnungsnummer bereits vorhanden`
           : `${potentialDuplicates.length} mögliche(s) Duplikat(e) gefunden`,
         details: {
-          duplicateCandidates: potentialDuplicates.map(d => ({
+          duplicateCandidates: potentialDuplicates.map((d) => ({
             id: d.id,
             invoiceNumber: d.invoiceNumber,
             periodStart: d.periodStart.toISOString(),
             amount: d.amount,
             daysDifference: Math.round(
-              Math.abs(d.periodStart.getTime() - record.periodStart.getTime()) / (24 * 60 * 60 * 1000)
+              Math.abs(d.periodStart.getTime() - record.periodStart.getTime()) /
+                (24 * 60 * 60 * 1000),
             ),
           })),
           sameInvoiceNumber,

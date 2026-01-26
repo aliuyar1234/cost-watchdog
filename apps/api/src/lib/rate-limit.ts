@@ -31,11 +31,11 @@ export interface RateLimitResult {
  * Default rate limits by endpoint type.
  */
 export const RATE_LIMITS = {
-  default: { windowSeconds: 60, maxRequests: 100 },
-  auth: { windowSeconds: 60, maxRequests: 10 },
-  upload: { windowSeconds: 60, maxRequests: 20 },
-  export: { windowSeconds: 60, maxRequests: 10 },
-  api_key: { windowSeconds: 60, maxRequests: 1000 },
+  default: { windowSeconds: 60, maxRequests: 100, keyPrefix: 'rate_limit:default' },
+  auth: { windowSeconds: 60, maxRequests: 10, keyPrefix: 'rate_limit:auth' },
+  upload: { windowSeconds: 60, maxRequests: 20, keyPrefix: 'rate_limit:upload' },
+  export: { windowSeconds: 60, maxRequests: 10, keyPrefix: 'rate_limit:export' },
+  api_key: { windowSeconds: 60, maxRequests: 1000, keyPrefix: 'rate_limit:api_key' },
 } as const;
 
 /**
@@ -45,7 +45,7 @@ export const RATE_LIMITS = {
  */
 export async function checkRateLimit(
   key: string,
-  config: RateLimitConfig
+  config: RateLimitConfig,
 ): Promise<RateLimitResult> {
   const now = Math.floor(Date.now() / 1000);
   const resetAt = new Date((now + config.windowSeconds) * 1000);
@@ -84,7 +84,10 @@ export async function checkRateLimit(
       retryAfter: allowed ? undefined : config.windowSeconds,
     };
   } catch (error) {
-    console.error('[RateLimit] Redis error:', error instanceof Error ? error.message : 'Unknown error');
+    console.error(
+      '[RateLimit] Redis error:',
+      error instanceof Error ? error.message : 'Unknown error',
+    );
 
     // Security: Fail closed in production to prevent brute-force attacks during Redis outages
     if (failClosed) {
@@ -124,7 +127,7 @@ export function getRateLimitKey(request: FastifyRequest): string {
   }
 
   // Fall back to IP
-  const ip = request.ip || request.headers['x-forwarded-for'] || 'unknown';
+  const ip = request.ip || 'unknown';
   return `ip:${ip}`;
 }
 
@@ -152,7 +155,10 @@ export function createRateLimitHook(config: RateLimitConfig = RATE_LIMITS.defaul
         });
       }
     } catch (error) {
-      console.error('[RateLimit] Hook error:', error instanceof Error ? error.message : 'Unknown error');
+      console.error(
+        '[RateLimit] Hook error:',
+        error instanceof Error ? error.message : 'Unknown error',
+      );
 
       // Security: Fail closed in production
       if (IS_PRODUCTION) {

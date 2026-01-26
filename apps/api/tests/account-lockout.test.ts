@@ -265,7 +265,9 @@ describe('Account Lockout Service', () => {
 
   describe('Email normalization', () => {
     const normalizeTestEmail = `normalize-test-${Date.now()}@example.com`;
-    const normalizeTestEmailUpper = normalizeTestEmail.replace('normalize', 'NORMALIZE').replace('example', 'EXAMPLE');
+    const normalizeTestEmailUpper = normalizeTestEmail
+      .replace('normalize', 'NORMALIZE')
+      .replace('example', 'EXAMPLE');
 
     beforeEach(async () => {
       await redis.del(`lockout:attempts:${normalizeTestEmail.toLowerCase()}`);

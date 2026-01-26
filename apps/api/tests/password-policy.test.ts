@@ -18,7 +18,9 @@ describe('Password Policy', () => {
     it('should reject password shorter than minimum length', () => {
       const result = validatePassword('Short1!');
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      expect(result.errors).toContain(
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters`,
+      );
     });
 
     it('should reject password longer than maximum length', () => {
@@ -49,7 +51,9 @@ describe('Password Policy', () => {
     it('should reject password without special character', () => {
       const result = validatePassword('NoSpecial123Abc');
       expect(result.valid).toBe(false);
-      expect(result.errors).toContain('Password must contain at least one special character (!@#$%^&*...)');
+      expect(result.errors).toContain(
+        'Password must contain at least one special character (!@#$%^&*...)',
+      );
     });
 
     it('should return multiple errors for multiple violations', () => {
@@ -92,27 +96,27 @@ describe('Password Policy', () => {
 
     it('should include minimum length requirement', () => {
       const requirements = getPasswordRequirements();
-      expect(requirements.some(r => r.includes(`${PASSWORD_MIN_LENGTH}`))).toBe(true);
+      expect(requirements.some((r) => r.includes(`${PASSWORD_MIN_LENGTH}`))).toBe(true);
     });
 
     it('should include uppercase requirement', () => {
       const requirements = getPasswordRequirements();
-      expect(requirements.some(r => r.toLowerCase().includes('uppercase'))).toBe(true);
+      expect(requirements.some((r) => r.toLowerCase().includes('uppercase'))).toBe(true);
     });
 
     it('should include lowercase requirement', () => {
       const requirements = getPasswordRequirements();
-      expect(requirements.some(r => r.toLowerCase().includes('lowercase'))).toBe(true);
+      expect(requirements.some((r) => r.toLowerCase().includes('lowercase'))).toBe(true);
     });
 
     it('should include number requirement', () => {
       const requirements = getPasswordRequirements();
-      expect(requirements.some(r => r.toLowerCase().includes('number'))).toBe(true);
+      expect(requirements.some((r) => r.toLowerCase().includes('number'))).toBe(true);
     });
 
     it('should include special character requirement', () => {
       const requirements = getPasswordRequirements();
-      expect(requirements.some(r => r.toLowerCase().includes('special'))).toBe(true);
+      expect(requirements.some((r) => r.toLowerCase().includes('special'))).toBe(true);
     });
   });
 

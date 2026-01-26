@@ -64,14 +64,15 @@ export function hashToken(token: string): string {
  */
 export async function createTokenFamily(
   userId: string,
-  refreshToken: string
+  refreshToken: string,
+  familyId?: string,
 ): Promise<TokenFamily> {
-  const familyId = randomUUID();
+  const effectiveFamilyId = familyId || randomUUID();
   const tokenHash = hashToken(refreshToken);
   const now = Date.now();
 
   const family: TokenFamily = {
-    familyId,
+    familyId: effectiveFamilyId,
     userId,
     currentTokenHash: tokenHash,
     generation: 1,
@@ -80,7 +81,7 @@ export async function createTokenFamily(
     invalidated: false,
   };
 
-  const key = `${TOKEN_FAMILY_PREFIX}${familyId}`;
+  const key = `${TOKEN_FAMILY_PREFIX}${effectiveFamilyId}`;
   await redis.setex(key, TOKEN_FAMILY_TTL, JSON.stringify(family));
 
   return family;
@@ -107,10 +108,7 @@ async function updateTokenFamily(family: TokenFamily): Promise<void> {
 /**
  * Invalidate a token family (theft detection or logout).
  */
-export async function invalidateTokenFamily(
-  familyId: string,
-  reason: string
-): Promise<boolean> {
+export async function invalidateTokenFamily(familyId: string, reason: string): Promise<boolean> {
   const family = await getTokenFamily(familyId);
   if (!family) return false;
 
@@ -127,7 +125,7 @@ export async function invalidateTokenFamily(
  */
 export async function invalidateAllFamiliesForUser(
   userId: string,
-  reason: string
+  reason: string,
 ): Promise<number> {
   // Scan for all families belonging to this user
   // Note: In production with many users, consider using a secondary index
@@ -140,7 +138,7 @@ export async function invalidateAllFamiliesForUser(
       'MATCH',
       `${TOKEN_FAMILY_PREFIX}*`,
       'COUNT',
-      100
+      100,
     );
     cursor = newCursor;
     keys.push(...foundKeys);
@@ -197,7 +195,7 @@ async function isTokenUsed(tokenHash: string): Promise<string | null> {
 export async function rotateToken(
   familyId: string,
   currentToken: string,
-  newToken: string
+  newToken: string,
 ): Promise<RotationResult> {
   const currentHash = hashToken(currentToken);
   const newHash = hashToken(newToken);
@@ -265,7 +263,7 @@ export async function rotateToken(
  */
 export async function validateTokenFamily(
   familyId: string,
-  token: string
+  token: string,
 ): Promise<{
   valid: boolean;
   family?: TokenFamily;

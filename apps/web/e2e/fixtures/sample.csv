@@ -1,0 +1,2 @@
+invoiceNumber,periodStart,periodEnd,amount,costType
+INV-0001,2025-01-01,2025-01-31,123.45,electricity

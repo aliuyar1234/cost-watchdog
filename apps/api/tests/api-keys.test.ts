@@ -416,7 +416,6 @@ describe('API Key Routes', () => {
 });
 
 describe('API Key Authentication', () => {
-  let app: ReturnType<typeof Fastify>;
   let adminUserId: string;
 
   beforeEach(async () => {
@@ -488,10 +487,7 @@ describe('API Key Authentication', () => {
       where: {
         keyHash,
         isActive: true,
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } },
-        ],
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
       },
     });
 

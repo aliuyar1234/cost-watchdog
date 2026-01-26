@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🔧 Fixing data issues...\n');
+  console.log('Fixing data issues...\n');
 
   // 1. Update all documents to completed status
   const docUpdate = await prisma.document.updateMany({
@@ -13,14 +13,14 @@ async function main() {
       extractedAt: new Date(),
     },
   });
-  console.log(`✅ Updated ${docUpdate.count} documents to completed status`);
+  console.log(`Updated ${docUpdate.count} documents to completed status`);
 
   // 2. Check anomalies
   const anomalyStats = await prisma.anomaly.groupBy({
     by: ['status'],
     _count: true,
   });
-  console.log('\n📊 Anomaly stats:');
+  console.log('\nAnomaly stats:');
   for (const stat of anomalyStats) {
     console.log(`   ${stat.status}: ${stat._count}`);
   }
@@ -31,13 +31,13 @@ async function main() {
       costRecord: null,
     },
   });
-  console.log(`\n⚠️  Anomalies without cost records: ${anomaliesWithoutRecords.length}`);
+  console.log(`\nAnomalies without cost records: ${anomaliesWithoutRecords.length}`);
 
   if (anomaliesWithoutRecords.length > 0) {
     // Delete orphaned anomalies
     await prisma.anomaly.deleteMany({
       where: {
-        id: { in: anomaliesWithoutRecords.map(a => a.id) },
+        id: { in: anomaliesWithoutRecords.map((a) => a.id) },
       },
     });
     console.log(`   Deleted ${anomaliesWithoutRecords.length} orphaned anomalies`);
@@ -46,9 +46,9 @@ async function main() {
   // 4. Show final anomaly count
   const finalCount = await prisma.anomaly.count();
   const newCount = await prisma.anomaly.count({ where: { status: 'new' } });
-  console.log(`\n✅ Total anomalies: ${finalCount} (${newCount} new)`);
+  console.log(`\nTotal anomalies: ${finalCount} (${newCount} new)`);
 
-  console.log('\n🎉 Data fixes complete!');
+  console.log('\nData fixes complete!');
 }
 
 main()

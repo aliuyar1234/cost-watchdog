@@ -8,7 +8,7 @@ import type {
   HistoricalCostRecord,
 } from './types';
 import { DEFAULT_ANOMALY_SETTINGS } from './types';
-import { ALL_CHECKS, getCheckById } from './checks';
+import { ALL_CHECKS } from './checks';
 import type { CostType } from '../types';
 
 /**
@@ -97,7 +97,7 @@ export class AnomalyEngine {
   async detect(
     record: CostRecordToCheck,
     context: CheckContext,
-    options: DetectionOptions = {}
+    options: DetectionOptions = {},
   ): Promise<DetectionResult> {
     const { isBackfill = false, checkIds } = options;
 
@@ -175,19 +175,17 @@ export class AnomalyEngine {
    */
   private getChecksToRun(costType: CostType, checkIds?: string[]): AnomalyCheck[] {
     // Start with enabled checks
-    let checks = ALL_CHECKS.filter(check =>
-      this.settings.enabledChecks.includes(check.id)
-    );
+    let checks = ALL_CHECKS.filter((check) => this.settings.enabledChecks.includes(check.id));
 
     // Filter by specific check IDs if provided
     if (checkIds && checkIds.length > 0) {
-      checks = checks.filter(check => checkIds.includes(check.id));
+      checks = checks.filter((check) => checkIds.includes(check.id));
     }
 
     // Filter by applicable cost types
-    checks = checks.filter(check =>
-      check.applicableCostTypes === 'all' ||
-      check.applicableCostTypes.includes(costType)
+    checks = checks.filter(
+      (check) =>
+        check.applicableCostTypes === 'all' || check.applicableCostTypes.includes(costType),
     );
 
     return checks;
@@ -199,7 +197,7 @@ export class AnomalyEngine {
   private calculateHistoricalMonths(records: HistoricalCostRecord[]): number {
     if (records.length === 0) return 0;
 
-    const dates = records.map(r => r.periodStart.getTime());
+    const dates = records.map((r) => r.periodStart.getTime());
     const minDate = Math.min(...dates);
     const maxDate = Math.max(...dates);
 
@@ -234,7 +232,7 @@ export class AnomalyEngine {
    * Disable a check
    */
   disableCheck(checkId: string): void {
-    this.settings.enabledChecks = this.settings.enabledChecks.filter(id => id !== checkId);
+    this.settings.enabledChecks = this.settings.enabledChecks.filter((id) => id !== checkId);
   }
 }
 

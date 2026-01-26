@@ -39,7 +39,7 @@ export const documentsApi = {
 
   getDownloadUrl: (id: string) =>
     fetchApi<{ downloadUrl: string; filename: string; expiresIn: number }>(
-      `/documents/${id}/download`
+      `/documents/${id}/download`,
     ),
 
   delete: (id: string) =>

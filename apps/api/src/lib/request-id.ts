@@ -42,7 +42,9 @@ export function isValidRequestId(requestId: string): boolean {
  * Extract request ID from headers, or generate a new one.
  * Sanitizes incoming request IDs to prevent injection.
  */
-export function extractOrGenerateRequestId(headers: Record<string, string | string[] | undefined>): string {
+export function extractOrGenerateRequestId(
+  headers: Record<string, string | string[] | undefined>,
+): string {
   const incomingId = headers[REQUEST_ID_HEADER] || headers[REQUEST_ID_HEADER_LOWER];
 
   if (incomingId) {

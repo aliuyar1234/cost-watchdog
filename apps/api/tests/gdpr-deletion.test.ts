@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { prisma } from '../src/lib/db.js';
 import { redis } from '../src/lib/redis.js';
 import {
@@ -369,7 +369,10 @@ describe('GDPR Deletion Service', () => {
           isActive: true,
           passwordHash: 'some-hash',
           avatarUrl: 'https://example.com/avatar.png',
-          allowedLocationIds: ['11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222'],
+          allowedLocationIds: [
+            '11111111-1111-1111-1111-111111111111',
+            '22222222-2222-2222-2222-222222222222',
+          ],
         },
       });
 
@@ -699,7 +702,7 @@ describe('GDPR Deletion Service', () => {
       });
 
       const gdprLog = auditLogs.find(
-        (log) => (log.metadata as Record<string, unknown>)?.gdprDeletion === true
+        (log) => (log.metadata as Record<string, unknown>)?.gdprDeletion === true,
       );
       expect(gdprLog).toBeDefined();
       expect(gdprLog?.performedBy).toBe(testAdminId);

@@ -26,7 +26,9 @@ async function main() {
 
   console.log('\nFirst 5 anomalies:');
   for (const a of anomalies) {
-    console.log(`  - ${a.type} | ${a.severity} | ${a.status} | costRecordId: ${a.costRecordId} | has costRecord: ${!!a.costRecord}`);
+    console.log(
+      `  - ${a.type} | ${a.severity} | ${a.status} | costRecordId: ${a.costRecordId} | has costRecord: ${!!a.costRecord}`,
+    );
   }
 }
 

@@ -258,7 +258,7 @@ export const excelConnector: Connector = {
           }
           if (value && typeof value === 'object' && 'richText' in value) {
             // Rich text - extract plain text
-            value = (value.richText as Array<{ text: string }>).map(t => t.text).join('');
+            value = (value.richText as Array<{ text: string }>).map((t) => t.text).join('');
           }
           rowValues.push(value);
         });
@@ -311,7 +311,10 @@ export const excelConnector: Connector = {
         const row = jsonData[i] as unknown[];
 
         // Skip empty rows
-        if (config.skipEmptyRows !== false && (!row || row.every(cell => cell === null || cell === ''))) {
+        if (
+          config.skipEmptyRows !== false &&
+          (!row || row.every((cell) => cell === null || cell === ''))
+        ) {
           continue;
         }
 
@@ -327,7 +330,10 @@ export const excelConnector: Connector = {
         }
       }
 
-      const confidence = records.length > 0 ? Math.min(0.9, 0.5 + (records.length / (jsonData.length - startRowIndex)) * 0.4) : 0;
+      const confidence =
+        records.length > 0
+          ? Math.min(0.9, 0.5 + (records.length / (jsonData.length - startRowIndex)) * 0.4)
+          : 0;
 
       return {
         success: true,
@@ -409,7 +415,7 @@ function parseRow(
   mappings: ExcelColumnMappings,
   getColumnIndex: (col: string | undefined) => number | undefined,
   config: ExcelExtractionConfig,
-  rowIndex: number
+  rowIndex: number,
 ): ParsedRow | null {
   const getValue = (columnName: string | undefined): unknown => {
     const index = getColumnIndex(columnName);
@@ -446,7 +452,10 @@ function parseRow(
   const amountNet = parseOptionalNumber(getValue(mappings.amountNet), config.decimalSeparator);
   const vatAmount = parseOptionalNumber(getValue(mappings.vatAmount), config.decimalSeparator);
   const quantity = parseOptionalNumber(getValue(mappings.quantity), config.decimalSeparator);
-  const pricePerUnit = parseOptionalNumber(getValue(mappings.pricePerUnit), config.decimalSeparator);
+  const pricePerUnit = parseOptionalNumber(
+    getValue(mappings.pricePerUnit),
+    config.decimalSeparator,
+  );
 
   return {
     periodStart,
@@ -471,7 +480,7 @@ function parseRow(
 /**
  * Parse a date value
  */
-function parseDate(value: unknown, format?: string): Date | null {
+function parseDate(value: unknown, _format?: string): Date | null {
   if (value instanceof Date) {
     return value;
   }
@@ -487,7 +496,7 @@ function parseDate(value: unknown, format?: string): Date | null {
     const patterns = [
       /^(\d{2})\.(\d{2})\.(\d{4})$/, // DD.MM.YYYY
       /^(\d{2})\/(\d{2})\/(\d{4})$/, // DD/MM/YYYY
-      /^(\d{4})-(\d{2})-(\d{2})$/,   // YYYY-MM-DD
+      /^(\d{4})-(\d{2})-(\d{2})$/, // YYYY-MM-DD
     ];
 
     for (const pattern of patterns) {
@@ -565,7 +574,7 @@ function parseOptionalNumber(value: unknown, decimalSeparator?: '.' | ','): numb
 function createCostRecord(
   parsed: ParsedRow,
   filename: string,
-  inputHash: string
+  inputHash: string,
 ): ExtractedCostRecord {
   // Map cost type string to CostType enum
   const costType = mapCostType(parsed.costType);
@@ -607,60 +616,60 @@ function mapCostType(type: string | undefined): CostType {
   const normalized = type.toLowerCase().trim();
   const mappings: Record<string, CostType> = {
     // Electricity
-    'electricity': 'electricity',
-    'strom': 'electricity',
-    'elektrizität': 'electricity',
+    electricity: 'electricity',
+    strom: 'electricity',
+    elektrizität: 'electricity',
     // Gas
-    'gas': 'natural_gas',
-    'erdgas': 'natural_gas',
-    'natural_gas': 'natural_gas',
+    gas: 'natural_gas',
+    erdgas: 'natural_gas',
+    natural_gas: 'natural_gas',
     // Water
-    'water': 'water',
-    'wasser': 'water',
+    water: 'water',
+    wasser: 'water',
     // Heating
-    'heating': 'district_heating',
-    'heizung': 'district_heating',
-    'fernwärme': 'district_heating',
-    'heating_oil': 'heating_oil',
-    'heizöl': 'heating_oil',
+    heating: 'district_heating',
+    heizung: 'district_heating',
+    fernwärme: 'district_heating',
+    heating_oil: 'heating_oil',
+    heizöl: 'heating_oil',
     // Cooling
-    'cooling': 'district_cooling',
-    'kühlung': 'district_cooling',
-    'klimatisierung': 'district_cooling',
+    cooling: 'district_cooling',
+    kühlung: 'district_cooling',
+    klimatisierung: 'district_cooling',
     // Waste
-    'waste': 'waste',
-    'abfall': 'waste',
-    'entsorgung': 'waste',
+    waste: 'waste',
+    abfall: 'waste',
+    entsorgung: 'waste',
     // Facility services -> operating_costs
-    'cleaning': 'operating_costs',
-    'reinigung': 'operating_costs',
-    'security': 'operating_costs',
-    'sicherheit': 'operating_costs',
+    cleaning: 'operating_costs',
+    reinigung: 'operating_costs',
+    security: 'operating_costs',
+    sicherheit: 'operating_costs',
     // Maintenance
-    'maintenance': 'maintenance',
-    'wartung': 'maintenance',
-    'instandhaltung': 'maintenance',
+    maintenance: 'maintenance',
+    wartung: 'maintenance',
+    instandhaltung: 'maintenance',
     // Rent
-    'rent': 'rent',
-    'miete': 'rent',
+    rent: 'rent',
+    miete: 'rent',
     // Insurance
-    'insurance': 'insurance',
-    'versicherung': 'insurance',
+    insurance: 'insurance',
+    versicherung: 'insurance',
     // Telecom
-    'telecom': 'telecom_landline',
-    'telekommunikation': 'telecom_landline',
-    'telefon': 'telecom_landline',
-    'internet': 'telecom_internet',
-    'mobile': 'telecom_mobile',
-    'mobilfunk': 'telecom_mobile',
+    telecom: 'telecom_landline',
+    telekommunikation: 'telecom_landline',
+    telefon: 'telecom_landline',
+    internet: 'telecom_internet',
+    mobile: 'telecom_mobile',
+    mobilfunk: 'telecom_mobile',
     // IT
-    'it_services': 'it_cloud',
+    it_services: 'it_cloud',
     'it-services': 'it_cloud',
-    'it': 'it_cloud',
-    'it_licenses': 'it_licenses',
-    'lizenzen': 'it_licenses',
-    'it_hardware': 'it_hardware',
-    'hardware': 'it_hardware',
+    it: 'it_cloud',
+    it_licenses: 'it_licenses',
+    lizenzen: 'it_licenses',
+    it_hardware: 'it_hardware',
+    hardware: 'it_hardware',
   };
 
   return mappings[normalized] || 'other';
@@ -674,23 +683,23 @@ function mapUnit(unit: string | undefined): ConsumptionUnit | undefined {
 
   const normalized = unit.toLowerCase().trim();
   const mappings: Record<string, ConsumptionUnit> = {
-    'kwh': 'kWh',
-    'mwh': 'MWh',
+    kwh: 'kWh',
+    mwh: 'MWh',
     'm³': 'm³',
-    'm3': 'm³',
-    'kubikmeter': 'm³',
-    'liter': 'liter',
-    'l': 'liter',
-    'kg': 'kg',
-    't': 'tonne',
-    'tonne': 'tonne',
-    'tonnen': 'tonne',
-    'stück': 'piece',
-    'stk': 'piece',
-    'pcs': 'piece',
-    'user': 'user',
-    'benutzer': 'user',
-    'gb': 'GB',
+    m3: 'm³',
+    kubikmeter: 'm³',
+    liter: 'liter',
+    l: 'liter',
+    kg: 'kg',
+    t: 'tonne',
+    tonne: 'tonne',
+    tonnen: 'tonne',
+    stück: 'piece',
+    stk: 'piece',
+    pcs: 'piece',
+    user: 'user',
+    benutzer: 'user',
+    gb: 'GB',
   };
 
   return mappings[normalized];

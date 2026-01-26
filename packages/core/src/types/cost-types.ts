@@ -101,21 +101,12 @@ export type DocumentType =
 /**
  * Document extraction status.
  */
-export type ExtractionStatus =
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'manual';
+export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'manual';
 
 /**
  * Document verification status.
  */
-export type VerificationStatus =
-  | 'pending'
-  | 'auto_verified'
-  | 'manually_verified'
-  | 'rejected';
+export type VerificationStatus = 'pending' | 'auto_verified' | 'manually_verified' | 'rejected';
 
 /**
  * Data quality indicator for cost records.

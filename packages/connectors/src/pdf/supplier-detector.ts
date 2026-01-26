@@ -133,7 +133,7 @@ export interface SupplierDetectionResult {
  */
 export function detectSupplier(
   text: string,
-  customSuppliers: SupplierPattern[] = []
+  customSuppliers: SupplierPattern[] = [],
 ): SupplierDetectionResult {
   const allSuppliers = [...customSuppliers, ...knownSuppliers];
 
@@ -142,7 +142,9 @@ export function detectSupplier(
   for (const taxId of taxIds) {
     const normalizedTaxId = taxId.replace(/[\s.-]/g, '').toUpperCase();
     for (const supplier of allSuppliers) {
-      if (supplier.taxIds?.some((t) => t.replace(/[\s.-]/g, '').toUpperCase() === normalizedTaxId)) {
+      if (
+        supplier.taxIds?.some((t) => t.replace(/[\s.-]/g, '').toUpperCase() === normalizedTaxId)
+      ) {
         return {
           detected: true,
           supplier,

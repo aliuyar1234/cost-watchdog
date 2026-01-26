@@ -17,7 +17,8 @@ describe('Metrics Service', () => {
     });
 
     it('should replace multiple UUIDs', () => {
-      const path = '/api/v1/users/123e4567-e89b-12d3-a456-426614174000/sessions/987fcdeb-51a2-3bc4-d567-890123456789';
+      const path =
+        '/api/v1/users/123e4567-e89b-12d3-a456-426614174000/sessions/987fcdeb-51a2-3bc4-d567-890123456789';
       const normalized = normalizePath(path);
       expect(normalized).toBe('/api/v1/users/:id/sessions/:id');
     });
@@ -62,12 +63,7 @@ describe('Metrics Service', () => {
 
     it('should normalize paths in metrics', () => {
       expect(() => {
-        recordHttpRequest(
-          'GET',
-          '/api/v1/users/123e4567-e89b-12d3-a456-426614174000',
-          200,
-          25
-        );
+        recordHttpRequest('GET', '/api/v1/users/123e4567-e89b-12d3-a456-426614174000', 200, 25);
       }).not.toThrow();
     });
   });

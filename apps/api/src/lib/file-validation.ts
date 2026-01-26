@@ -36,36 +36,37 @@ export interface SanitizedFilename {
  * Mapping of allowed MIME types to their expected magic byte signatures.
  * Some formats like CSV don't have magic bytes, so we handle them specially.
  */
-export const ALLOWED_FILE_TYPES: Record<string, { extensions: string[]; hasMagicBytes: boolean }> = {
-  'application/pdf': {
-    extensions: ['.pdf'],
-    hasMagicBytes: true,
-  },
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
-    extensions: ['.xlsx'],
-    hasMagicBytes: true,
-  },
-  'application/vnd.ms-excel': {
-    extensions: ['.xls'],
-    hasMagicBytes: true,
-  },
-  'text/csv': {
-    extensions: ['.csv'],
-    hasMagicBytes: false, // CSV is plain text, no magic bytes
-  },
-  'image/png': {
-    extensions: ['.png'],
-    hasMagicBytes: true,
-  },
-  'image/jpeg': {
-    extensions: ['.jpg', '.jpeg'],
-    hasMagicBytes: true,
-  },
-  'image/svg+xml': {
-    extensions: ['.svg'],
-    hasMagicBytes: false, // SVG is XML text
-  },
-};
+export const ALLOWED_FILE_TYPES: Record<string, { extensions: string[]; hasMagicBytes: boolean }> =
+  {
+    'application/pdf': {
+      extensions: ['.pdf'],
+      hasMagicBytes: true,
+    },
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {
+      extensions: ['.xlsx'],
+      hasMagicBytes: true,
+    },
+    'application/vnd.ms-excel': {
+      extensions: ['.xls'],
+      hasMagicBytes: true,
+    },
+    'text/csv': {
+      extensions: ['.csv'],
+      hasMagicBytes: false, // CSV is plain text, no magic bytes
+    },
+    'image/png': {
+      extensions: ['.png'],
+      hasMagicBytes: true,
+    },
+    'image/jpeg': {
+      extensions: ['.jpg', '.jpeg'],
+      hasMagicBytes: true,
+    },
+    'image/svg+xml': {
+      extensions: ['.svg'],
+      hasMagicBytes: false, // SVG is XML text
+    },
+  };
 
 /**
  * MIME types that match file-type's detected MIME type.
@@ -89,7 +90,7 @@ const MIME_TYPE_ALIASES: Record<string, string[]> = {
  */
 export async function validateFileMagicBytes(
   buffer: Buffer,
-  declaredMimeType: string
+  declaredMimeType: string,
 ): Promise<FileValidationResult> {
   const typeConfig = ALLOWED_FILE_TYPES[declaredMimeType];
 
@@ -316,6 +317,7 @@ export function sanitizeSvg(buffer: Buffer): Buffer | null {
  * Characters that are not allowed in filenames.
  * Includes path separators and special characters.
  */
+// eslint-disable-next-line no-control-regex
 const FORBIDDEN_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/g;
 
 /**
@@ -325,16 +327,35 @@ const PATH_TRAVERSAL_PATTERNS = [
   /\.\./g, // Parent directory
   /^\.+$/, // Only dots
   /^~/, // Home directory shortcut
-  /^\// // Absolute path (Unix)
+  /^\//, // Absolute path (Unix)
 ];
 
 /**
  * Reserved filenames on Windows.
  */
 const RESERVED_FILENAMES = [
-  'CON', 'PRN', 'AUX', 'NUL',
-  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
-  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+  'CON',
+  'PRN',
+  'AUX',
+  'NUL',
+  'COM1',
+  'COM2',
+  'COM3',
+  'COM4',
+  'COM5',
+  'COM6',
+  'COM7',
+  'COM8',
+  'COM9',
+  'LPT1',
+  'LPT2',
+  'LPT3',
+  'LPT4',
+  'LPT5',
+  'LPT6',
+  'LPT7',
+  'LPT8',
+  'LPT9',
 ];
 
 /**
@@ -392,7 +413,7 @@ export function sanitizeFilename(filename: string): SanitizedFilename {
  */
 export function validateFilenameExtension(
   filename: string,
-  declaredMimeType: string
+  declaredMimeType: string,
 ): { valid: boolean; error?: string } {
   const ext = path.extname(filename).toLowerCase();
   const typeConfig = ALLOWED_FILE_TYPES[declaredMimeType];
@@ -432,7 +453,7 @@ export interface CompleteFileValidation {
 export async function validateFile(
   buffer: Buffer,
   filename: string,
-  declaredMimeType: string
+  declaredMimeType: string,
 ): Promise<CompleteFileValidation> {
   const errors: string[] = [];
 

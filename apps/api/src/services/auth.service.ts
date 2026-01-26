@@ -9,11 +9,10 @@ import { prisma } from '../lib/db.js';
 import {
   hashPassword,
   verifyPassword,
-  generateTokenPair,
   generateTokenPairWithFamily,
   verifyRefreshTokenWithFamily,
 } from '../lib/auth.js';
-import { blacklistToken } from '../lib/redis.js';
+import { blacklistToken, isTokenBlacklisted } from '../lib/redis.js';
 import { logAuditEvent } from '../lib/audit.js';
 import { validatePassword } from '../lib/password-policy.js';
 import {
@@ -21,8 +20,14 @@ import {
   recordFailedAttempt,
   resetAttempts,
   invalidateAllSessionsForUser,
+  isUserBlacklisted,
 } from '../lib/account-lockout.js';
-import { createSession, terminateSession, terminateAllSessions } from '../lib/sessions.js';
+import {
+  createSession,
+  terminateSession,
+  terminateAllSessions,
+  isSessionBlacklisted,
+} from '../lib/sessions.js';
 import {
   createPasswordResetToken,
   validateResetToken,
@@ -33,6 +38,7 @@ import {
   rotateToken,
   invalidateAllFamiliesForUser,
 } from '../lib/token-rotation.js';
+import { randomUUID } from 'crypto';
 
 // ----------------------------------------------------------------------------
 // TYPES
@@ -127,7 +133,7 @@ export class AuthService {
   async register(
     input: RegisterInput,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<AuthResponse> {
     const { email, password, firstName, lastName } = input;
 
@@ -165,7 +171,8 @@ export class AuthService {
     // Determine role
     const initialAdminEmail = process.env['INITIAL_ADMIN_EMAIL']?.toLowerCase();
     const userCount = await prisma.user.count();
-    const isInitialAdmin = userCount === 0 && initialAdminEmail && email.toLowerCase() === initialAdminEmail;
+    const isInitialAdmin =
+      userCount === 0 && initialAdminEmail && email.toLowerCase() === initialAdminEmail;
     const role = isInitialAdmin ? 'admin' : 'viewer';
 
     // Create user
@@ -181,20 +188,33 @@ export class AuthService {
       },
     });
 
-    // Generate tokens
-    const tokens = await generateTokenPair({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
+    // Generate tokens + token family for rotation support
+    const familyId = randomUUID();
+    const tokens = await generateTokenPairWithFamily(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      familyId,
+    );
 
-    // Create session
-    await createSession(
-      tokens.sessionId,
-      user.id,
-      ctx.ipAddress,
-      ctx.userAgent
-    ).catch((err) => logger?.error(err, 'Failed to create session'));
+    try {
+      await createTokenFamily(user.id, tokens.refreshToken, familyId);
+      await createSession(tokens.sessionId, user.id, ctx.ipAddress, ctx.userAgent);
+    } catch (error) {
+      logger?.error(error, 'Failed to finalize registration');
+      // Best-effort cleanup so a user can retry registration.
+      await prisma.user.delete({ where: { id: user.id } }).catch((err) => {
+        logger?.error(err, 'Failed to rollback user after registration failure');
+      });
+      return {
+        success: false,
+        error: 'Internal Server Error',
+        message: 'Failed to complete registration. Please try again.',
+        statusCode: 500,
+      };
+    }
 
     return {
       success: true,
@@ -217,7 +237,7 @@ export class AuthService {
   async login(
     input: LoginInput,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<AuthResponse> {
     const { email, password } = input;
 
@@ -257,8 +277,17 @@ export class AuthService {
   async refresh(
     refreshToken: string,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<RefreshResponse> {
+    if (await isTokenBlacklisted(refreshToken)) {
+      return {
+        success: false,
+        error: 'Unauthorized',
+        message: 'Invalid or expired refresh token',
+        statusCode: 401,
+      };
+    }
+
     // Verify token
     const tokenData = await verifyRefreshTokenWithFamily(refreshToken);
     if (!tokenData) {
@@ -270,7 +299,35 @@ export class AuthService {
       };
     }
 
-    const { userId, familyId } = tokenData;
+    const { userId, familyId, sessionId, issuedAt } = tokenData;
+
+    if (sessionId && (await isSessionBlacklisted(sessionId))) {
+      return {
+        success: false,
+        error: 'Unauthorized',
+        message: 'Session has been terminated',
+        statusCode: 401,
+      };
+    }
+
+    if (typeof issuedAt !== 'number') {
+      return {
+        success: false,
+        error: 'Unauthorized',
+        message: 'Invalid or expired refresh token',
+        statusCode: 401,
+      };
+    }
+
+    if (await isUserBlacklisted(userId, issuedAt)) {
+      return {
+        success: false,
+        error: 'Unauthorized',
+        message: 'User access has been revoked. Please log in again.',
+        statusCode: 401,
+        securityEvent: true,
+      };
+    }
 
     // Get user
     const user = await prisma.user.findUnique({
@@ -286,13 +343,19 @@ export class AuthService {
       };
     }
 
-    let newTokens: { accessToken: string; refreshToken: string; sessionId: string; familyId: string };
+    let newTokens: {
+      accessToken: string;
+      refreshToken: string;
+      sessionId: string;
+      familyId: string;
+    };
 
     if (familyId) {
       // Token has family - use rotation
       newTokens = await generateTokenPairWithFamily(
         { id: user.id, email: user.email, role: user.role },
-        familyId
+        familyId,
+        sessionId ?? undefined,
       );
 
       const rotationResult = await rotateToken(familyId, refreshToken, newTokens.refreshToken);
@@ -313,10 +376,10 @@ export class AuthService {
 
         if (rotationResult.theftDetected) {
           await terminateAllSessions(user.id).catch((err) =>
-            logger?.error(err, 'Failed to terminate sessions after token theft')
+            logger?.error(err, 'Failed to terminate sessions after token theft'),
           );
           await invalidateAllFamiliesForUser(user.id, 'token_theft_detected').catch((err) =>
-            logger?.error(err, 'Failed to invalidate token families')
+            logger?.error(err, 'Failed to invalidate token families'),
           );
 
           return {
@@ -336,19 +399,55 @@ export class AuthService {
         };
       }
     } else {
-      // Legacy token - create new family
-      const legacyTokens = await generateTokenPair({
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      });
-
-      const newFamily = await createTokenFamily(user.id, legacyTokens.refreshToken);
+      // Legacy token without family: upgrade to rotation-enabled family.
+      const newFamilyId = randomUUID();
+      await createTokenFamily(user.id, refreshToken, newFamilyId);
 
       newTokens = await generateTokenPairWithFamily(
         { id: user.id, email: user.email, role: user.role },
-        newFamily.familyId
+        newFamilyId,
+        sessionId ?? undefined,
       );
+
+      const rotationResult = await rotateToken(newFamilyId, refreshToken, newTokens.refreshToken);
+      if (!rotationResult.success) {
+        await logAuditEvent({
+          entityType: 'user',
+          entityId: user.id,
+          action: 'token_refresh',
+          metadata: {
+            error: rotationResult.error,
+            theftDetected: rotationResult.theftDetected || false,
+            familyId: newFamilyId,
+          },
+          performedBy: user.id,
+          ...ctx,
+        }).catch((err) => logger?.error(err, 'Failed to log audit event'));
+
+        if (rotationResult.theftDetected) {
+          await terminateAllSessions(user.id).catch((err) =>
+            logger?.error(err, 'Failed to terminate sessions after token theft'),
+          );
+          await invalidateAllFamiliesForUser(user.id, 'token_theft_detected').catch((err) =>
+            logger?.error(err, 'Failed to invalidate token families'),
+          );
+
+          return {
+            success: false,
+            error: 'Unauthorized',
+            message: 'Security violation detected. Please log in again.',
+            statusCode: 401,
+            securityEvent: true,
+          };
+        }
+
+        return {
+          success: false,
+          error: 'Unauthorized',
+          message: rotationResult.error || 'Token refresh failed',
+          statusCode: 401,
+        };
+      }
     }
 
     // Log refresh
@@ -378,10 +477,19 @@ export class AuthService {
     accessToken: string | undefined,
     refreshToken: string | undefined,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<LogoutResult> {
     if (sessionId && userId) {
-      await terminateSession(sessionId, userId, accessToken, refreshToken);
+      const terminated = await terminateSession(sessionId, userId, accessToken, refreshToken);
+      if (!terminated) {
+        // Fallback when session record is missing
+        if (accessToken) {
+          await blacklistToken(accessToken, ACCESS_TOKEN_TTL);
+        }
+        if (refreshToken) {
+          await blacklistToken(refreshToken, REFRESH_TOKEN_TTL);
+        }
+      }
     } else {
       // Fallback: blacklist tokens directly
       if (accessToken) {
@@ -416,7 +524,7 @@ export class AuthService {
   async requestPasswordReset(
     email: string,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<PasswordResetRequestResult | AuthError> {
     const result = await createPasswordResetToken(email, ctx.ipAddress);
 
@@ -454,7 +562,7 @@ export class AuthService {
     token: string,
     newPassword: string,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<PasswordResetResult | AuthError> {
     const result = await resetPasswordLib(token, newPassword);
 
@@ -482,7 +590,7 @@ export class AuthService {
     // Invalidate sessions
     if (validation.userId) {
       await terminateAllSessions(validation.userId).catch((err) =>
-        logger?.error(err, 'Failed to terminate sessions after password reset')
+        logger?.error(err, 'Failed to terminate sessions after password reset'),
       );
     }
 
@@ -523,10 +631,7 @@ export class AuthService {
   /**
    * Check if account is locked out.
    */
-  private async checkAccountLockout(
-    email: string,
-    ctx: AuthContext
-  ): Promise<AuthError | null> {
+  private async checkAccountLockout(email: string, ctx: AuthContext): Promise<AuthError | null> {
     const lockoutStatus = await checkLockout(email);
     if (!lockoutStatus.locked) return null;
 
@@ -536,7 +641,8 @@ export class AuthService {
       return {
         success: false,
         error: 'Account Locked',
-        message: 'Account has been locked due to too many failed attempts. Contact an administrator to unlock.',
+        message:
+          'Account has been locked due to too many failed attempts. Contact an administrator to unlock.',
         statusCode: 423,
       };
     }
@@ -557,8 +663,20 @@ export class AuthService {
     email: string,
     password: string,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
-  ): Promise<{ success: true; user: { id: string; email: string; firstName: string | null; lastName: string | null; role: string } } | { success: false; error: AuthError }> {
+    logger?: { error: (err: unknown, msg: string) => void },
+  ): Promise<
+    | {
+        success: true;
+        user: {
+          id: string;
+          email: string;
+          firstName: string | null;
+          lastName: string | null;
+          role: string;
+        };
+      }
+    | { success: false; error: AuthError }
+  > {
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -609,7 +727,7 @@ export class AuthService {
     user: { id: string; email: string },
     email: string,
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<AuthError> {
     const newLockoutStatus = await recordFailedAttempt(email, 'invalid_password');
 
@@ -657,16 +775,16 @@ export class AuthService {
   private async prepareNewSession(
     userId: string,
     email: string,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<void> {
     await resetAttempts(email);
 
     // Session fixation prevention
     await terminateAllSessions(userId).catch((err) =>
-      logger?.error(err, 'Failed to terminate existing sessions during login')
+      logger?.error(err, 'Failed to terminate existing sessions during login'),
     );
     await invalidateAllFamiliesForUser(userId, 'new_login').catch((err) =>
-      logger?.error(err, 'Failed to invalidate token families during login')
+      logger?.error(err, 'Failed to invalidate token families during login'),
     );
 
     // Update last login (fire and forget)
@@ -684,27 +802,19 @@ export class AuthService {
   private async issueTokensAndSession(
     user: { id: string; email: string; role: string },
     ctx: AuthContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<{ accessToken: string; refreshToken: string; sessionId: string }> {
-    const tokens = await generateTokenPair({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    const tokenFamily = await createTokenFamily(user.id, tokens.refreshToken);
-
-    const tokensWithFamily = await generateTokenPairWithFamily(
+    const familyId = randomUUID();
+    const tokens = await generateTokenPairWithFamily(
       { id: user.id, email: user.email, role: user.role },
-      tokenFamily.familyId
+      familyId,
     );
 
-    await createSession(
-      tokensWithFamily.sessionId,
-      user.id,
-      ctx.ipAddress,
-      ctx.userAgent
-    ).catch((err) => logger?.error(err, 'Failed to create session'));
+    const tokenFamily = await createTokenFamily(user.id, tokens.refreshToken, familyId);
+
+    await createSession(tokens.sessionId, user.id, ctx.ipAddress, ctx.userAgent).catch((err) =>
+      logger?.error(err, 'Failed to create session'),
+    );
 
     await logAuditEvent({
       entityType: 'user',
@@ -712,7 +822,7 @@ export class AuthService {
       action: 'login',
       metadata: {
         email: user.email,
-        sessionId: tokensWithFamily.sessionId,
+        sessionId: tokens.sessionId,
         tokenFamilyId: tokenFamily.familyId,
       },
       performedBy: user.id,
@@ -720,9 +830,9 @@ export class AuthService {
     }).catch((err) => logger?.error(err, 'Failed to log audit event'));
 
     return {
-      accessToken: tokensWithFamily.accessToken,
-      refreshToken: tokensWithFamily.refreshToken,
-      sessionId: tokensWithFamily.sessionId,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      sessionId: tokens.sessionId,
     };
   }
 
@@ -730,7 +840,7 @@ export class AuthService {
     email: string,
     reason: string,
     ctx: AuthContext,
-    lockoutReason?: string
+    lockoutReason?: string,
   ): Promise<void> {
     await logAuditEvent({
       entityType: 'user',

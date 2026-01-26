@@ -106,7 +106,7 @@ export async function checkLockout(email: string): Promise<LockoutStatus> {
  */
 export async function recordFailedAttempt(
   email: string,
-  reason: string = 'invalid_credentials'
+  reason: string = 'invalid_credentials',
 ): Promise<LockoutStatus> {
   const attemptsKey = getAttemptsKey(email);
   const lockoutKey = getLockoutKey(email);
@@ -202,11 +202,7 @@ export async function unlockAccount(email: string): Promise<void> {
   const lockoutKey = getLockoutKey(email);
   const lockoutCountKey = getLockoutCountKey(email);
 
-  await Promise.all([
-    redis.del(attemptsKey),
-    redis.del(lockoutKey),
-    redis.del(lockoutCountKey),
-  ]);
+  await Promise.all([redis.del(attemptsKey), redis.del(lockoutKey), redis.del(lockoutCountKey)]);
 }
 
 /**

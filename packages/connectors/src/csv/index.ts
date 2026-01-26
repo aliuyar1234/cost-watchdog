@@ -273,7 +273,10 @@ export const csvConnector: Connector = {
         const row = rows[i];
 
         // Skip empty rows
-        if (config.skipEmptyRows !== false && (!row || row.every(cell => !cell || cell.trim() === ''))) {
+        if (
+          config.skipEmptyRows !== false &&
+          (!row || row.every((cell) => !cell || cell.trim() === ''))
+        ) {
           continue;
         }
 
@@ -290,7 +293,8 @@ export const csvConnector: Connector = {
       }
 
       const totalDataRows = rows.length - startRowIndex;
-      const confidence = records.length > 0 ? Math.min(0.9, 0.5 + (records.length / totalDataRows) * 0.4) : 0;
+      const confidence =
+        records.length > 0 ? Math.min(0.9, 0.5 + (records.length / totalDataRows) * 0.4) : 0;
 
       return {
         success: true,
@@ -375,7 +379,8 @@ function detectDelimiter(content: string): string {
   let maxCount = 0;
 
   for (const delimiter of delimiters) {
-    const count = (firstLines.match(new RegExp(delimiter.replace(/[|\\]/g, '\\$&'), 'g')) || []).length;
+    const count = (firstLines.match(new RegExp(delimiter.replace(/[|\\]/g, '\\$&'), 'g')) || [])
+      .length;
     if (count > maxCount) {
       maxCount = count;
       bestDelimiter = delimiter;
@@ -436,7 +441,7 @@ function parseRow(
   mappings: CsvColumnMappings,
   getColumnIndex: (col: string | number | undefined) => number | undefined,
   config: CsvExtractionConfig,
-  rowIndex: number
+  rowIndex: number,
 ): ParsedRow | null {
   const getValue = (mapping: string | number | undefined): string | undefined => {
     const index = getColumnIndex(mapping);
@@ -473,7 +478,10 @@ function parseRow(
   const amountNet = parseOptionalNumber(getValue(mappings.amountNet), config.decimalSeparator);
   const vatAmount = parseOptionalNumber(getValue(mappings.vatAmount), config.decimalSeparator);
   const quantity = parseOptionalNumber(getValue(mappings.quantity), config.decimalSeparator);
-  const pricePerUnit = parseOptionalNumber(getValue(mappings.pricePerUnit), config.decimalSeparator);
+  const pricePerUnit = parseOptionalNumber(
+    getValue(mappings.pricePerUnit),
+    config.decimalSeparator,
+  );
 
   return {
     periodStart,
@@ -498,16 +506,16 @@ function parseRow(
 /**
  * Parse a date value
  */
-function parseDate(value: string, format?: string): Date | null {
+function parseDate(value: string, _format?: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
   // Try common German formats
   const patterns = [
-    { regex: /^(\d{2})\.(\d{2})\.(\d{4})$/, parts: [3, 2, 1] },   // DD.MM.YYYY
-    { regex: /^(\d{2})\/(\d{2})\/(\d{4})$/, parts: [3, 2, 1] },   // DD/MM/YYYY
-    { regex: /^(\d{4})-(\d{2})-(\d{2})$/, parts: [1, 2, 3] },     // YYYY-MM-DD
-    { regex: /^(\d{2})-(\d{2})-(\d{4})$/, parts: [3, 2, 1] },     // DD-MM-YYYY
+    { regex: /^(\d{2})\.(\d{2})\.(\d{4})$/, parts: [3, 2, 1] }, // DD.MM.YYYY
+    { regex: /^(\d{2})\/(\d{2})\/(\d{4})$/, parts: [3, 2, 1] }, // DD/MM/YYYY
+    { regex: /^(\d{4})-(\d{2})-(\d{2})$/, parts: [1, 2, 3] }, // YYYY-MM-DD
+    { regex: /^(\d{2})-(\d{2})-(\d{4})$/, parts: [3, 2, 1] }, // DD-MM-YYYY
   ];
 
   for (const { regex, parts } of patterns) {
@@ -563,7 +571,10 @@ function parseNumber(value: string, decimalSeparator?: '.' | ','): number {
 /**
  * Parse an optional number value
  */
-function parseOptionalNumber(value: string | undefined, decimalSeparator?: '.' | ','): number | undefined {
+function parseOptionalNumber(
+  value: string | undefined,
+  decimalSeparator?: '.' | ',',
+): number | undefined {
   if (!value || value.trim() === '') {
     return undefined;
   }
@@ -577,7 +588,7 @@ function parseOptionalNumber(value: string | undefined, decimalSeparator?: '.' |
 function createCostRecord(
   parsed: ParsedRow,
   filename: string,
-  inputHash: string
+  inputHash: string,
 ): ExtractedCostRecord {
   const costType = mapCostType(parsed.costType);
 
@@ -618,60 +629,60 @@ function mapCostType(type: string | undefined): CostType {
   const normalized = type.toLowerCase().trim();
   const mappings: Record<string, CostType> = {
     // Electricity
-    'electricity': 'electricity',
-    'strom': 'electricity',
-    'elektrizität': 'electricity',
+    electricity: 'electricity',
+    strom: 'electricity',
+    elektrizität: 'electricity',
     // Gas
-    'gas': 'natural_gas',
-    'erdgas': 'natural_gas',
-    'natural_gas': 'natural_gas',
+    gas: 'natural_gas',
+    erdgas: 'natural_gas',
+    natural_gas: 'natural_gas',
     // Water
-    'water': 'water',
-    'wasser': 'water',
+    water: 'water',
+    wasser: 'water',
     // Heating
-    'heating': 'district_heating',
-    'heizung': 'district_heating',
-    'fernwärme': 'district_heating',
-    'heating_oil': 'heating_oil',
-    'heizöl': 'heating_oil',
+    heating: 'district_heating',
+    heizung: 'district_heating',
+    fernwärme: 'district_heating',
+    heating_oil: 'heating_oil',
+    heizöl: 'heating_oil',
     // Cooling
-    'cooling': 'district_cooling',
-    'kühlung': 'district_cooling',
-    'klimatisierung': 'district_cooling',
+    cooling: 'district_cooling',
+    kühlung: 'district_cooling',
+    klimatisierung: 'district_cooling',
     // Waste
-    'waste': 'waste',
-    'abfall': 'waste',
-    'entsorgung': 'waste',
+    waste: 'waste',
+    abfall: 'waste',
+    entsorgung: 'waste',
     // Facility services -> operating_costs
-    'cleaning': 'operating_costs',
-    'reinigung': 'operating_costs',
-    'security': 'operating_costs',
-    'sicherheit': 'operating_costs',
+    cleaning: 'operating_costs',
+    reinigung: 'operating_costs',
+    security: 'operating_costs',
+    sicherheit: 'operating_costs',
     // Maintenance
-    'maintenance': 'maintenance',
-    'wartung': 'maintenance',
-    'instandhaltung': 'maintenance',
+    maintenance: 'maintenance',
+    wartung: 'maintenance',
+    instandhaltung: 'maintenance',
     // Rent
-    'rent': 'rent',
-    'miete': 'rent',
+    rent: 'rent',
+    miete: 'rent',
     // Insurance
-    'insurance': 'insurance',
-    'versicherung': 'insurance',
+    insurance: 'insurance',
+    versicherung: 'insurance',
     // Telecom
-    'telecom': 'telecom_landline',
-    'telekommunikation': 'telecom_landline',
-    'telefon': 'telecom_landline',
-    'internet': 'telecom_internet',
-    'mobile': 'telecom_mobile',
-    'mobilfunk': 'telecom_mobile',
+    telecom: 'telecom_landline',
+    telekommunikation: 'telecom_landline',
+    telefon: 'telecom_landline',
+    internet: 'telecom_internet',
+    mobile: 'telecom_mobile',
+    mobilfunk: 'telecom_mobile',
     // IT
-    'it_services': 'it_cloud',
+    it_services: 'it_cloud',
     'it-services': 'it_cloud',
-    'it': 'it_cloud',
-    'it_licenses': 'it_licenses',
-    'lizenzen': 'it_licenses',
-    'it_hardware': 'it_hardware',
-    'hardware': 'it_hardware',
+    it: 'it_cloud',
+    it_licenses: 'it_licenses',
+    lizenzen: 'it_licenses',
+    it_hardware: 'it_hardware',
+    hardware: 'it_hardware',
   };
 
   return mappings[normalized] || 'other';
@@ -685,24 +696,24 @@ function mapUnit(unit: string | undefined): ConsumptionUnit | undefined {
 
   const normalized = unit.toLowerCase().trim();
   const mappings: Record<string, ConsumptionUnit> = {
-    'kwh': 'kWh',
-    'mwh': 'MWh',
+    kwh: 'kWh',
+    mwh: 'MWh',
     'm³': 'm³',
-    'm3': 'm³',
-    'kubikmeter': 'm³',
-    'liter': 'liter',
-    'l': 'liter',
-    'kg': 'kg',
-    't': 'tonne',
-    'tonne': 'tonne',
-    'tonnen': 'tonne',
-    'stück': 'piece',
-    'stk': 'piece',
-    'pcs': 'piece',
-    'piece': 'piece',
-    'user': 'user',
-    'benutzer': 'user',
-    'gb': 'GB',
+    m3: 'm³',
+    kubikmeter: 'm³',
+    liter: 'liter',
+    l: 'liter',
+    kg: 'kg',
+    t: 'tonne',
+    tonne: 'tonne',
+    tonnen: 'tonne',
+    stück: 'piece',
+    stk: 'piece',
+    pcs: 'piece',
+    piece: 'piece',
+    user: 'user',
+    benutzer: 'user',
+    gb: 'GB',
   };
 
   return mappings[normalized];

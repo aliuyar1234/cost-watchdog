@@ -18,9 +18,10 @@ export const uuidSchema = z.string().uuid('Invalid UUID format');
 /**
  * Date string validation (ISO 8601).
  */
-export const dateStringSchema = z.string().datetime({ offset: true }).or(
-  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
-);
+export const dateStringSchema = z
+  .string()
+  .datetime({ offset: true })
+  .or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'));
 
 /**
  * Date that accepts various formats and converts to Date object.
@@ -57,18 +58,20 @@ export type PaginationInput = z.infer<typeof paginationSchema>;
 // DATE RANGE
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const dateRangeSchema = z.object({
-  startDate: dateSchema.optional(),
-  endDate: dateSchema.optional(),
-}).refine(
-  (data) => {
-    if (data.startDate && data.endDate) {
-      return data.startDate <= data.endDate;
-    }
-    return true;
-  },
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const dateRangeSchema = z
+  .object({
+    startDate: dateSchema.optional(),
+    endDate: dateSchema.optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        return data.startDate <= data.endDate;
+      }
+      return true;
+    },
+    { message: 'startDate must be before or equal to endDate' },
+  );
 
 export type DateRangeInput = z.infer<typeof dateRangeSchema>;
 
@@ -89,17 +92,17 @@ export type SortOrder = z.infer<typeof sortOrderSchema>;
  * Removes HTML tags and trims whitespace.
  */
 export function sanitizeString(val: string): string {
-  return val.trim().replace(/<[^>]*>/g, '').replace(/[<>]/g, '');
+  return val
+    .trim()
+    .replace(/<[^>]*>/g, '')
+    .replace(/[<>]/g, '');
 }
 
 /**
  * Create a sanitized string schema with length constraints.
  */
 export function sanitizedString(minLen: number, maxLen: number) {
-  return z.string()
-    .min(minLen)
-    .max(maxLen)
-    .transform(sanitizeString);
+  return z.string().min(minLen).max(maxLen).transform(sanitizeString);
 }
 
 /**
@@ -110,19 +113,21 @@ export const sanitizedStringSchema = z.string().transform(sanitizeString);
 /**
  * Email validation with normalization.
  */
-export const emailSchema = z.string()
+export const emailSchema = z
+  .string()
   .email('Invalid email format')
   .transform((val) => val.toLowerCase().trim());
 
 /**
  * Safe file path component (no path traversal).
  */
-export const safeFilenameSchema = z.string()
+export const safeFilenameSchema = z
+  .string()
   .min(1, 'Filename is required')
   .max(255, 'Filename too long')
   .refine(
     (val) => !val.includes('..') && !val.includes('/') && !val.includes('\\'),
-    'Invalid filename: path traversal not allowed'
+    'Invalid filename: path traversal not allowed',
   );
 
 // ═══════════════════════════════════════════════════════════════════════════

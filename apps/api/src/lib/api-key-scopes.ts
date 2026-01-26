@@ -78,7 +78,10 @@ export function hasScope(request: FastifyRequest, scope: ApiKeyScope): boolean {
 /**
  * Check if a request has ALL of the required scopes.
  */
-export function hasAllScopes(request: FastifyRequest, requiredScopes: ApiKeyScope[]): ScopeCheckResult {
+export function hasAllScopes(
+  request: FastifyRequest,
+  requiredScopes: ApiKeyScope[],
+): ScopeCheckResult {
   const user = request.user;
 
   if (!user) {
@@ -103,7 +106,10 @@ export function hasAllScopes(request: FastifyRequest, requiredScopes: ApiKeyScop
 /**
  * Check if a request has ANY of the required scopes.
  */
-export function hasAnyScope(request: FastifyRequest, requiredScopes: ApiKeyScope[]): ScopeCheckResult {
+export function hasAnyScope(
+  request: FastifyRequest,
+  requiredScopes: ApiKeyScope[],
+): ScopeCheckResult {
   const user = request.user;
 
   if (!user) {

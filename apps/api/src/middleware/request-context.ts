@@ -36,26 +36,9 @@ declare module 'fastify' {
 
 /**
  * Extract client IP address from request.
- * Handles proxy headers (X-Forwarded-For, X-Real-IP) when behind a reverse proxy.
+ * Uses Fastify's `request.ip`, which respects `trustProxy` configuration.
  */
 function getClientIp(request: FastifyRequest): string {
-  // X-Forwarded-For may contain multiple IPs: client, proxy1, proxy2...
-  // The first IP is the original client
-  const forwardedFor = request.headers['x-forwarded-for'];
-  if (forwardedFor) {
-    const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
-    const clientIp = ips?.split(',')[0]?.trim();
-    if (clientIp) return clientIp;
-  }
-
-  // X-Real-IP is set by some proxies (nginx)
-  const realIp = request.headers['x-real-ip'];
-  if (realIp) {
-    const ip = Array.isArray(realIp) ? realIp[0] : realIp;
-    if (ip) return ip;
-  }
-
-  // Fall back to direct connection IP
   return request.ip || 'unknown';
 }
 

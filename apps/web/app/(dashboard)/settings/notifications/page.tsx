@@ -29,9 +29,8 @@ export default function NotificationSettingsPage() {
         });
       } catch (err) {
         if (cancelled) return;
-        const errorMessage = err instanceof ApiError
-          ? err.message
-          : 'Failed to load notification settings';
+        const errorMessage =
+          err instanceof ApiError ? err.message : 'Failed to load notification settings';
         setMessage({ type: 'error', text: errorMessage });
       } finally {
         if (!cancelled) {
@@ -61,9 +60,8 @@ export default function NotificationSettingsPage() {
       });
       setMessage({ type: 'success', text: 'Notification settings updated.' });
     } catch (err) {
-      const errorMessage = err instanceof ApiError
-        ? err.message
-        : 'Failed to update notification settings';
+      const errorMessage =
+        err instanceof ApiError ? err.message : 'Failed to update notification settings';
       setMessage({ type: 'error', text: errorMessage });
     } finally {
       setSaving(false);
@@ -72,8 +70,8 @@ export default function NotificationSettingsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-[300px] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      <div className="flex min-h-[300px] items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -82,51 +80,62 @@ export default function NotificationSettingsPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Notification settings</h1>
-        <p className="text-gray-600 mt-1">Control which alerts you receive.</p>
+        <p className="mt-1 text-gray-600">Control which alerts you receive.</p>
       </div>
 
       {message && (
-        <div className={`mb-6 p-4 rounded-lg ${
-          message.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-        }`}>
-          <p className={message.type === 'success' ? 'text-green-700' : 'text-red-700'}>{message.text}</p>
+        <div
+          className={`mb-6 rounded-lg p-4 ${
+            message.type === 'success'
+              ? 'border border-green-200 bg-green-50'
+              : 'border border-red-200 bg-red-50'
+          }`}
+        >
+          <p className={message.type === 'success' ? 'text-green-700' : 'text-red-700'}>
+            {message.text}
+          </p>
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow p-6 space-y-6">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-          Admin settings control global channels and severity thresholds. Your selections here only affect your account.
+      <div className="space-y-6 rounded-lg bg-white p-6 shadow">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
+          Admin settings control global channels and severity thresholds. Your selections here only
+          affect your account.
         </div>
 
-        <div className="flex items-center justify-between pb-4 border-b">
+        <div className="flex items-center justify-between border-b pb-4">
           <div>
             <h3 className="font-medium text-gray-900">Email alerts</h3>
             <p className="text-sm text-gray-500">Receive anomaly alerts by email.</p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className="relative inline-flex cursor-pointer items-center">
             <input
               type="checkbox"
+              aria-label="Email alerts enabled"
               checked={settings.emailAlertsEnabled}
               onChange={(e) => setSettings({ ...settings, emailAlertsEnabled: e.target.checked })}
-              className="sr-only peer"
+              className="peer sr-only"
             />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300"></div>
           </label>
         </div>
 
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-medium text-gray-900">Daily digest</h3>
-            <p className="text-sm text-gray-500">Receive a daily summary email when enabled by admins.</p>
+            <p className="text-sm text-gray-500">
+              Receive a daily summary email when enabled by admins.
+            </p>
           </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+          <label className="relative inline-flex cursor-pointer items-center">
             <input
               type="checkbox"
+              aria-label="Daily digest enabled"
               checked={settings.dailyDigestEnabled}
               onChange={(e) => setSettings({ ...settings, dailyDigestEnabled: e.target.checked })}
-              className="sr-only peer"
+              className="peer sr-only"
             />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            <div className="peer h-6 w-11 rounded-full bg-gray-200 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-blue-600 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300"></div>
           </label>
         </div>
 
@@ -134,7 +143,7 @@ export default function NotificationSettingsPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>

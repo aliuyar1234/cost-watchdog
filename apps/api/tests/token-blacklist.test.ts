@@ -48,7 +48,7 @@ describe('Token Blacklist', () => {
       expect(mockRedis.setex).toHaveBeenCalledWith(
         expect.stringMatching(/^token_blacklist:/),
         ttl,
-        '1'
+        '1',
       );
     });
 
@@ -58,11 +58,7 @@ describe('Token Blacklist', () => {
 
       await blacklistToken(token, 900);
 
-      expect(mockRedis.setex).toHaveBeenCalledWith(
-        `token_blacklist:${expectedHash}`,
-        900,
-        '1'
-      );
+      expect(mockRedis.setex).toHaveBeenCalledWith(`token_blacklist:${expectedHash}`, 900, '1');
     });
 
     it('handles different token lengths', async () => {
@@ -135,7 +131,8 @@ describe('Logout Token Invalidation', () => {
   });
 
   it('logout should blacklist access token', async () => {
-    const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature';
+    const accessToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature';
     const ACCESS_TOKEN_TTL = 15 * 60; // 15 minutes
 
     await blacklistToken(accessToken, ACCESS_TOKEN_TTL);
@@ -143,7 +140,7 @@ describe('Logout Token Invalidation', () => {
     expect(mockRedis.setex).toHaveBeenCalledWith(
       expect.stringMatching(/^token_blacklist:/),
       ACCESS_TOKEN_TTL,
-      '1'
+      '1',
     );
   });
 
@@ -153,11 +150,7 @@ describe('Logout Token Invalidation', () => {
 
     await blacklistToken(token, expectedTTL);
 
-    expect(mockRedis.setex).toHaveBeenCalledWith(
-      expect.any(String),
-      expectedTTL,
-      '1'
-    );
+    expect(mockRedis.setex).toHaveBeenCalledWith(expect.any(String), expectedTTL, '1');
   });
 });
 
@@ -199,11 +192,7 @@ describe('Token Blacklist Security', () => {
     mockRedis.setex.mockResolvedValue('OK');
     await blacklistToken(token, 900);
 
-    expect(mockRedis.setex).toHaveBeenCalledWith(
-      `token_blacklist:${truncatedHash}`,
-      900,
-      '1'
-    );
+    expect(mockRedis.setex).toHaveBeenCalledWith(`token_blacklist:${truncatedHash}`, 900, '1');
 
     // Verify the key uses truncated hash (32 chars)
     const actualKey = mockRedis.setex.mock.calls[0][0] as string;

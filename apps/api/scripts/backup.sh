@@ -46,7 +46,7 @@ error() {
 }
 
 notify_success() {
-  local message="✅ *Cost Watchdog Backup Successful*\n\n📦 File: \`${BACKUP_FILE}\`\n📊 Size: ${BACKUP_SIZE}\n🔑 Checksum: \`${CHECKSUM}\`\n🗓️ Timestamp: ${TIMESTAMP}"
+  local message="*Cost Watchdog Backup Successful*\n\nFile: \`${BACKUP_FILE}\`\nSize: ${BACKUP_SIZE}\nChecksum: \`${CHECKSUM}\`\nTimestamp: ${TIMESTAMP}"
 
   if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
     curl -s -X POST "${SLACK_WEBHOOK_URL}" \
@@ -62,7 +62,7 @@ notify_success() {
 }
 
 notify_failure() {
-  local message="❌ *Cost Watchdog Backup FAILED*\n\n🚨 Error: $1\n🗓️ Timestamp: ${TIMESTAMP}"
+  local message="*Cost Watchdog Backup FAILED*\n\nError: $1\nTimestamp: ${TIMESTAMP}"
 
   if [[ -n "${SLACK_WEBHOOK_URL:-}" ]]; then
     curl -s -X POST "${SLACK_WEBHOOK_URL}" \

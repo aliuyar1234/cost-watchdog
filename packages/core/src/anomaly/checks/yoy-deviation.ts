@@ -15,10 +15,11 @@ export const yoyDeviationCheck: AnomalyCheck = {
 
   async check(record: CostRecordToCheck, context: CheckContext): Promise<CheckResult> {
     // Find the record from the same month last year
-    const lastYear = context.historicalRecords.find(r =>
-      r.periodStart.getMonth() === record.periodStart.getMonth() &&
-      r.periodStart.getFullYear() === record.periodStart.getFullYear() - 1 &&
-      r.costType === record.costType
+    const lastYear = context.historicalRecords.find(
+      (r) =>
+        r.periodStart.getMonth() === record.periodStart.getMonth() &&
+        r.periodStart.getFullYear() === record.periodStart.getFullYear() - 1 &&
+        r.costType === record.costType,
     );
 
     if (!lastYear) {

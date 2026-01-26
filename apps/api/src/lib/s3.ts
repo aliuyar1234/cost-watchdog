@@ -42,7 +42,7 @@ if (IS_PRODUCTION) {
 if (!IS_PRODUCTION && (!S3_ACCESS_KEY || !S3_SECRET_KEY)) {
   console.warn(
     '[S3] WARNING: S3 credentials not set. ' +
-    'Please configure them in your .env file for local development.'
+      'Please configure them in your .env file for local development.',
   );
 }
 
@@ -101,7 +101,7 @@ export function calculateFileHash(buffer: Buffer): string {
 export async function uploadFile(
   storagePath: string,
   buffer: Buffer,
-  contentType: string
+  contentType: string,
 ): Promise<{ bucket: string; key: string }> {
   const params: PutObjectCommandInput = {
     Bucket: BUCKET,
@@ -185,16 +185,40 @@ export async function fileExists(storagePath: string): Promise<boolean> {
  * Generate a presigned URL for downloading a file.
  *
  * @param storagePath - The storage path/key for the file
- * @param expiresIn - URL expiration time in seconds (default: 1 hour)
+ * @param opts - Presign options (default: 1 hour expiry)
  * @returns Presigned URL
  */
 export async function getPresignedDownloadUrl(
   storagePath: string,
-  expiresIn: number = 3600
+  opts?: {
+    expiresIn?: number;
+    filename?: string;
+    mimeType?: string;
+    contentDisposition?: 'inline' | 'attachment';
+  },
 ): Promise<string> {
+  const expiresIn = opts?.expiresIn ?? 3600;
+
+  const sanitizeFilename = (value: string): string => {
+    const basename = value.split(/[\\/]/).pop() || value;
+    const cleaned = basename.replace(/[\r\n"]/g, '').trim();
+    return cleaned.length > 0 ? cleaned : 'download';
+  };
+
+  const dispositionType =
+    opts?.contentDisposition ||
+    (opts?.mimeType === 'application/pdf' || opts?.mimeType?.startsWith('image/')
+      ? 'inline'
+      : 'attachment');
+
+  const filename = opts?.filename ? sanitizeFilename(opts.filename) : undefined;
+  const contentDisposition = filename ? `${dispositionType}; filename="${filename}"` : undefined;
+
   const command = new GetObjectCommand({
     Bucket: BUCKET,
     Key: storagePath,
+    ...(contentDisposition ? { ResponseContentDisposition: contentDisposition } : {}),
+    ...(opts?.mimeType ? { ResponseContentType: opts.mimeType } : {}),
   });
 
   return getSignedUrl(s3Client, command, { expiresIn });
@@ -211,7 +235,7 @@ export async function getPresignedDownloadUrl(
 export async function getPresignedUploadUrl(
   storagePath: string,
   contentType: string,
-  expiresIn: number = 900
+  expiresIn: number = 900,
 ): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: BUCKET,

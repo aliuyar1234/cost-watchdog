@@ -16,9 +16,9 @@ export const momDeviationCheck: AnomalyCheck = {
   async check(record: CostRecordToCheck, context: CheckContext): Promise<CheckResult> {
     // Get the most recent record of the same cost type (before current record)
     const sameTypeRecords = context.historicalRecords
-      .filter(r =>
-        r.costType === record.costType &&
-        r.periodStart.getTime() < record.periodStart.getTime()
+      .filter(
+        (r) =>
+          r.costType === record.costType && r.periodStart.getTime() < record.periodStart.getTime(),
       )
       .sort((a, b) => b.periodStart.getTime() - a.periodStart.getTime());
 

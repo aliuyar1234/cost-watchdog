@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardContent } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
+import { LinkButton } from '../../../components/ui/link-button';
 import { anomaliesApi, type Anomaly } from '../../../lib/api';
 import {
   formatDate,
@@ -52,35 +53,39 @@ const COST_TYPE_LABELS: Record<string, string> = {
 
 export default function AnomalyDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const [anomaly, setAnomaly] = useState<Anomaly | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [resolution, setResolution] = useState('');
   const [showResolveForm, setShowResolveForm] = useState(false);
 
   const anomalyId = params['id'] as string;
 
-  const fetchAnomaly = async () => {
+  const fetchAnomaly = useCallback(async () => {
     try {
+      setIsLoading(true);
+      setError(null);
       const data = await anomaliesApi.get(anomalyId);
       setAnomaly(data);
     } catch (error) {
-      console.error('Failed to fetch anomaly:', error);
+      setAnomaly(null);
+      setError(error instanceof Error ? error.message : 'Anomalie konnte nicht geladen werden.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [anomalyId]);
 
   useEffect(() => {
-    fetchAnomaly();
-  }, [anomalyId]);
+    void fetchAnomaly();
+  }, [fetchAnomaly]);
 
   const handleAction = async (action: 'acknowledge' | 'resolve' | 'false_positive') => {
     if (!anomaly) return;
 
     setIsProcessing(true);
     try {
+      setError(null);
       switch (action) {
         case 'acknowledge':
           await anomaliesApi.acknowledge(anomaly.id, resolution || undefined);
@@ -96,7 +101,7 @@ export default function AnomalyDetailPage() {
       setResolution('');
       setShowResolveForm(false);
     } catch (error) {
-      console.error(`Failed to ${action} anomaly:`, error);
+      setError(error instanceof Error ? error.message : 'Aktion fehlgeschlagen.');
     } finally {
       setIsProcessing(false);
     }
@@ -104,22 +109,31 @@ export default function AnomalyDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
   if (!anomaly) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-xl font-semibold text-gray-900">Anomalie nicht gefunden</h2>
+      <div className="py-12 text-center">
+        <h2 className="text-xl font-semibold text-gray-900">
+          {error ? 'Fehler beim Laden' : 'Anomalie nicht gefunden'}
+        </h2>
         <p className="mt-2 text-gray-500">
-          Die angeforderte Anomalie existiert nicht oder wurde gelöscht.
+          {error ? error : 'Die angeforderte Anomalie existiert nicht oder wurde gelöscht.'}
         </p>
-        <Link href="/anomalies">
-          <Button className="mt-4">Zurück zur Übersicht</Button>
-        </Link>
+        {error && (
+          <div className="mt-4">
+            <Button variant="outline" onClick={() => void fetchAnomaly()}>
+              Erneut versuchen
+            </Button>
+          </div>
+        )}
+        <LinkButton href="/anomalies" className="mt-4">
+          Zurück zur Übersicht
+        </LinkButton>
       </div>
     );
   }
@@ -128,15 +142,27 @@ export default function AnomalyDetailPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-red-700">{error}</p>
+            <Button variant="outline" size="sm" onClick={() => void fetchAnomaly()}>
+              Erneut versuchen
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="mb-2 flex items-center gap-2">
             <Link
               href="/anomalies"
-              className="text-gray-500 hover:text-gray-700 transition-colors"
+              className="text-gray-500 transition-colors hover:text-gray-700"
+              aria-label="Zurück zur Übersicht"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -148,14 +174,14 @@ export default function AnomalyDetailPage() {
             <span className="text-gray-500">Anomalie-Details</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">{anomaly.message}</h1>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="mt-2 flex items-center gap-2">
             {getSeverityBadge(anomaly.severity)}
             {getAnomalyStatusBadge(anomaly.status)}
             <span className="text-sm text-gray-500">
               {ANOMALY_TYPE_LABELS[anomaly.type] || anomaly.type}
             </span>
             {anomaly.isBackfill && (
-              <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">
+              <span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-800">
                 Historisch
               </span>
             )}
@@ -184,10 +210,7 @@ export default function AnomalyDetailPage() {
             </>
           )}
           {anomaly.status === 'acknowledged' && (
-            <Button
-              onClick={() => setShowResolveForm(true)}
-              disabled={isProcessing}
-            >
+            <Button onClick={() => setShowResolveForm(true)} disabled={isProcessing}>
               Als gelöst markieren
             </Button>
           )}
@@ -198,7 +221,7 @@ export default function AnomalyDetailPage() {
       {showResolveForm && (
         <Card>
           <CardContent className="pt-6">
-            <h3 className="font-medium text-gray-900 mb-3">Anomalie lösen</h3>
+            <h3 className="mb-3 font-medium text-gray-900">Anomalie lösen</h3>
             <textarea
               value={resolution}
               onChange={(e) => setResolution(e.target.value)}
@@ -206,7 +229,7 @@ export default function AnomalyDetailPage() {
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               rows={3}
             />
-            <div className="flex justify-end gap-2 mt-3">
+            <div className="mt-3 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -224,9 +247,9 @@ export default function AnomalyDetailPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         {/* Main Info */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6 lg:col-span-2">
           {/* Cost Record Details */}
           {anomaly.costRecord && (
             <Card>
@@ -244,8 +267,7 @@ export default function AnomalyDetailPage() {
                   <div>
                     <dt className="text-sm text-gray-500">Kostenart</dt>
                     <dd className="text-lg font-medium text-gray-900">
-                      {COST_TYPE_LABELS[anomaly.costRecord.costType] ||
-                        anomaly.costRecord.costType}
+                      {COST_TYPE_LABELS[anomaly.costRecord.costType] || anomaly.costRecord.costType}
                     </dd>
                   </div>
                   {anomaly.costRecord.quantity !== null && (
@@ -260,8 +282,7 @@ export default function AnomalyDetailPage() {
                     <div>
                       <dt className="text-sm text-gray-500">Preis/Einheit</dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {formatCurrency(anomaly.costRecord.pricePerUnit)}/
-                        {anomaly.costRecord.unit}
+                        {formatCurrency(anomaly.costRecord.pricePerUnit)}/{anomaly.costRecord.unit}
                       </dd>
                     </div>
                   )}
@@ -293,7 +314,7 @@ export default function AnomalyDetailPage() {
             <CardContent>
               <dl className="space-y-4">
                 {details['expectedValue'] !== undefined && (
-                  <div className="flex justify-between items-center py-2 border-b">
+                  <div className="flex items-center justify-between border-b py-2">
                     <dt className="text-gray-500">Erwarteter Wert</dt>
                     <dd className="font-medium">
                       {formatCurrency(details['expectedValue'] as number)}
@@ -301,7 +322,7 @@ export default function AnomalyDetailPage() {
                   </div>
                 )}
                 {details['actualValue'] !== undefined && (
-                  <div className="flex justify-between items-center py-2 border-b">
+                  <div className="flex items-center justify-between border-b py-2">
                     <dt className="text-gray-500">Tatsächlicher Wert</dt>
                     <dd className="font-medium">
                       {formatCurrency(details['actualValue'] as number)}
@@ -309,7 +330,7 @@ export default function AnomalyDetailPage() {
                   </div>
                 )}
                 {details['deviationPercent'] !== undefined && (
-                  <div className="flex justify-between items-center py-2 border-b">
+                  <div className="flex items-center justify-between border-b py-2">
                     <dt className="text-gray-500">Abweichung</dt>
                     <dd
                       className={`font-medium ${
@@ -324,21 +345,19 @@ export default function AnomalyDetailPage() {
                   </div>
                 )}
                 {details['zScore'] !== undefined && (
-                  <div className="flex justify-between items-center py-2 border-b">
+                  <div className="flex items-center justify-between border-b py-2">
                     <dt className="text-gray-500">Z-Score</dt>
-                    <dd className="font-medium">
-                      {(details['zScore'] as number).toFixed(2)}
-                    </dd>
+                    <dd className="font-medium">{(details['zScore'] as number).toFixed(2)}</dd>
                   </div>
                 )}
                 {typeof details['method'] === 'string' && (
-                  <div className="flex justify-between items-center py-2 border-b">
+                  <div className="flex items-center justify-between border-b py-2">
                     <dt className="text-gray-500">Methode</dt>
                     <dd className="font-medium">{details['method']}</dd>
                   </div>
                 )}
                 {typeof details['comparisonPeriod'] === 'string' && (
-                  <div className="flex justify-between items-center py-2 border-b">
+                  <div className="flex items-center justify-between border-b py-2">
                     <dt className="text-gray-500">Vergleichszeitraum</dt>
                     <dd className="font-medium">{details['comparisonPeriod']}</dd>
                   </div>
@@ -370,9 +389,7 @@ export default function AnomalyDetailPage() {
                   <div>
                     <div className="text-sm text-gray-500">Standort</div>
                     <div className="font-medium">{anomaly.costRecord.location.name}</div>
-                    <div className="text-sm text-gray-400">
-                      {anomaly.costRecord.location.type}
-                    </div>
+                    <div className="text-sm text-gray-400">{anomaly.costRecord.location.type}</div>
                   </div>
                 )}
               </CardContent>
@@ -387,17 +404,15 @@ export default function AnomalyDetailPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2" />
+                  <div className="mt-2 h-2 w-2 rounded-full bg-blue-500" />
                   <div>
                     <div className="text-sm font-medium">Erkannt</div>
-                    <div className="text-xs text-gray-500">
-                      {formatDate(anomaly.detectedAt)}
-                    </div>
+                    <div className="text-xs text-gray-500">{formatDate(anomaly.detectedAt)}</div>
                   </div>
                 </div>
                 {anomaly.acknowledgedAt && (
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2" />
+                    <div className="mt-2 h-2 w-2 rounded-full bg-yellow-500" />
                     <div>
                       <div className="text-sm font-medium">Bestätigt</div>
                       <div className="text-xs text-gray-500">
@@ -408,11 +423,11 @@ export default function AnomalyDetailPage() {
                 )}
                 {anomaly.status === 'resolved' && (
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2" />
+                    <div className="mt-2 h-2 w-2 rounded-full bg-green-500" />
                     <div>
                       <div className="text-sm font-medium">Gelöst</div>
                       {anomaly.resolution && (
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="mt-1 text-xs text-gray-600">
                           {String(anomaly.resolution)}
                         </div>
                       )}
@@ -421,11 +436,11 @@ export default function AnomalyDetailPage() {
                 )}
                 {anomaly.status === 'false_positive' && (
                   <div className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full mt-2" />
+                    <div className="mt-2 h-2 w-2 rounded-full bg-gray-400" />
                     <div>
                       <div className="text-sm font-medium">Als Fehlalarm markiert</div>
                       {anomaly.resolution && (
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="mt-1 text-xs text-gray-600">
                           {String(anomaly.resolution)}
                         </div>
                       )}

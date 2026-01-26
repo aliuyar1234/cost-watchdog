@@ -14,6 +14,11 @@ import {
 import { createRedisConnection } from '../lib/redis.js';
 import { QUEUE_NAMES } from '../lib/queues.js';
 import { prisma } from '../lib/db.js';
+import {
+  anomaliesDetectedTotal,
+  backgroundJobDuration,
+  backgroundJobsTotal,
+} from '../lib/metrics.js';
 
 interface ThresholdSettings {
   yoyThreshold: number;
@@ -164,7 +169,7 @@ export async function processAnomalyDetection(job: Job<AnomalyJobPayload>): Prom
   };
 
   // Prepare historical records
-  const historicalForContext: HistoricalCostRecord[] = historicalRecords.map(r => ({
+  const historicalForContext: HistoricalCostRecord[] = historicalRecords.map((r) => ({
     id: r.id,
     costType: r.costType as CostType,
     amount: r.amount.toNumber(),
@@ -199,56 +204,62 @@ export async function processAnomalyDetection(job: Job<AnomalyJobPayload>): Prom
   const result = await engine.detect(recordToCheck, context, { isBackfill });
 
   console.log(
-    `[AnomalyWorker] Detection complete for ${costRecordId}: ${result.anomalies.length} anomalies found`
+    `[AnomalyWorker] Detection complete for ${costRecordId}: ${result.anomalies.length} anomalies found`,
   );
 
   // Store detected anomalies
   for (const anomaly of result.anomalies) {
-    await prisma.anomaly.upsert({
-      where: {
-        costRecordId_type: {
-          costRecordId: anomaly.costRecordId,
-          type: anomaly.type,
-        },
-      },
-      create: {
-        costRecordId: anomaly.costRecordId,
-        type: anomaly.type,
-        severity: anomaly.severity,
-        message: anomaly.message,
-        details: anomaly.details as Prisma.InputJsonValue,
-        isBackfill: anomaly.isBackfill,
-        status: 'new',
-      },
-      update: {
-        severity: anomaly.severity,
-        message: anomaly.message,
-        details: anomaly.details as Prisma.InputJsonValue,
-        isBackfill: anomaly.isBackfill,
-      },
-    });
-
-    // Queue alert if not backfill and severity is warning or critical
-    if (!isBackfill && (anomaly.severity === 'warning' || anomaly.severity === 'critical')) {
-      // Create outbox event for alert
-      await prisma.outboxEvent.create({
-        data: {
-          eventType: 'anomaly.detected',
-          aggregateType: 'anomaly',
-          aggregateId: costRecordId,
-          payload: {
+    await prisma.$transaction(async (tx) => {
+      const storedAnomaly = await tx.anomaly.upsert({
+        where: {
+          costRecordId_type: {
             costRecordId: anomaly.costRecordId,
             type: anomaly.type,
-            severity: anomaly.severity,
-            message: anomaly.message,
           },
         },
+        create: {
+          costRecordId: anomaly.costRecordId,
+          type: anomaly.type,
+          severity: anomaly.severity,
+          message: anomaly.message,
+          details: anomaly.details as Prisma.InputJsonValue,
+          isBackfill: anomaly.isBackfill,
+          status: 'new',
+        },
+        update: {
+          severity: anomaly.severity,
+          message: anomaly.message,
+          details: anomaly.details as Prisma.InputJsonValue,
+          isBackfill: anomaly.isBackfill,
+        },
       });
-    }
+
+      // Queue alert if not backfill and severity is warning or critical
+      if (!isBackfill && (anomaly.severity === 'warning' || anomaly.severity === 'critical')) {
+        await tx.outboxEvent.create({
+          data: {
+            eventType: 'anomaly.detected',
+            aggregateType: 'anomaly',
+            aggregateId: storedAnomaly.id,
+            payload: {
+              anomalyId: storedAnomaly.id,
+              costRecordId: anomaly.costRecordId,
+              type: anomaly.type,
+              severity: anomaly.severity,
+              message: anomaly.message,
+            },
+          },
+        });
+      }
+
+      return storedAnomaly;
+    });
+
+    anomaliesDetectedTotal.labels(anomaly.type, anomaly.severity).inc();
   }
 
   console.log(
-    `[AnomalyWorker] Stored ${result.anomalies.length} anomalies for cost record ${costRecordId}`
+    `[AnomalyWorker] Stored ${result.anomalies.length} anomalies for cost record ${costRecordId}`,
   );
 }
 
@@ -268,15 +279,29 @@ export function createAnomalyWorker(): Worker<AnomalyJobPayload> {
         max: 100,
         duration: 1000, // 100 jobs per second max
       },
-    }
+    },
   );
 
   worker.on('completed', (job) => {
     console.log(`[AnomalyWorker] Job ${job.id} completed`);
+    backgroundJobsTotal.labels(QUEUE_NAMES.ANOMALY_DETECTION, 'completed').inc();
+
+    if (job.processedOn && job.finishedOn) {
+      backgroundJobDuration
+        .labels(QUEUE_NAMES.ANOMALY_DETECTION)
+        .observe((job.finishedOn - job.processedOn) / 1000);
+    }
   });
 
   worker.on('failed', (job, err) => {
     console.error(`[AnomalyWorker] Job ${job?.id} failed:`, err);
+    backgroundJobsTotal.labels(QUEUE_NAMES.ANOMALY_DETECTION, 'failed').inc();
+
+    if (job?.processedOn && job?.finishedOn) {
+      backgroundJobDuration
+        .labels(QUEUE_NAMES.ANOMALY_DETECTION)
+        .observe((job.finishedOn - job.processedOn) / 1000);
+    }
   });
 
   worker.on('error', (err) => {

@@ -92,10 +92,7 @@ export function encrypt(plaintext: string): string {
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv(ALGORITHM, currentKey.key, iv);
 
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, 'utf8'),
-    cipher.final(),
-  ]);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 
   const authTag = cipher.getAuthTag();
 
@@ -126,7 +123,7 @@ export function decrypt(ciphertext: string): string {
   const authTag = packed.subarray(packed.length - AUTH_TAG_LENGTH);
   const encrypted = packed.subarray(
     KEY_VERSION_LENGTH + IV_LENGTH,
-    packed.length - AUTH_TAG_LENGTH
+    packed.length - AUTH_TAG_LENGTH,
   );
 
   const key = keyRing.get(version);
@@ -137,10 +134,7 @@ export function decrypt(ciphertext: string): string {
   const decipher = createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
 
-  const decrypted = Buffer.concat([
-    decipher.update(encrypted),
-    decipher.final(),
-  ]);
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
 
   return decrypted.toString('utf8');
 }

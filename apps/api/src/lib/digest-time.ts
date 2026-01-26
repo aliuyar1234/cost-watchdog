@@ -68,7 +68,7 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
     parts.day,
     parts.hour,
     parts.minute,
-    parts.second
+    parts.second,
   );
   return utcFromParts - date.getTime();
 }
@@ -88,7 +88,11 @@ export function getLocalDateKey(date: Date, timeZone?: string): string {
   return `${year}-${month}-${day}`;
 }
 
-export function getScheduledTimeForDate(base: Date, digestTime: DigestTime, timeZone?: string): Date {
+export function getScheduledTimeForDate(
+  base: Date,
+  digestTime: DigestTime,
+  timeZone?: string,
+): Date {
   if (!timeZone) {
     const scheduled = new Date(base);
     scheduled.setHours(digestTime.hour, digestTime.minute, 0, 0);
@@ -96,20 +100,26 @@ export function getScheduledTimeForDate(base: Date, digestTime: DigestTime, time
   }
 
   const baseParts = getZonedParts(base, timeZone);
-  const utcGuess = new Date(Date.UTC(
-    baseParts.year,
-    baseParts.month - 1,
-    baseParts.day,
-    digestTime.hour,
-    digestTime.minute,
-    0,
-    0
-  ));
+  const utcGuess = new Date(
+    Date.UTC(
+      baseParts.year,
+      baseParts.month - 1,
+      baseParts.day,
+      digestTime.hour,
+      digestTime.minute,
+      0,
+      0,
+    ),
+  );
   const offsetMs = getTimeZoneOffsetMs(utcGuess, timeZone);
   return new Date(utcGuess.getTime() - offsetMs);
 }
 
-export function getDigestWindow(now: Date, digestTime: DigestTime, timeZone?: string): {
+export function getDigestWindow(
+  now: Date,
+  digestTime: DigestTime,
+  timeZone?: string,
+): {
   digestKey: string;
   windowStart: Date;
   windowEnd: Date;

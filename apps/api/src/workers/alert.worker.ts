@@ -3,12 +3,10 @@ import { createRedisConnection } from '../lib/redis.js';
 import { QUEUE_NAMES, type AlertJobData } from '../lib/queues.js';
 import { prisma } from '../lib/db.js';
 import { loadAlertSettings } from '../lib/alert-settings.js';
-import {
-  sendAnomalyAlertEmail,
-  type AnomalyAlertEmailData,
-} from '../lib/email.js';
+import { sendAnomalyAlertEmail, type AnomalyAlertEmailData } from '../lib/email.js';
 import { sendSlackAnomalyAlert } from '../lib/slack.js';
 import { sendTeamsAnomalyAlert } from '../lib/teams.js';
+import { backgroundJobDuration, backgroundJobsTotal } from '../lib/metrics.js';
 
 /**
  * Dashboard URL for email links
@@ -163,17 +161,19 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
   const { anomaly } = alert;
   const costRecord = anomaly.costRecord;
 
-  if (!costRecord || !costRecord.location || !costRecord.supplier) {
+  if (!costRecord || !costRecord.supplier) {
     console.warn(`[AlertWorker] Alert ${alertId} missing required data`);
     await prisma.alert.update({
       where: { id: alertId },
       data: {
         status: 'failed',
-        errorMessage: 'Missing cost record, location, or supplier data',
+        errorMessage: 'Missing cost record or supplier data',
       },
     });
     return;
   }
+
+  const locationName = costRecord.location?.name || 'Unbekannt';
 
   const details = anomaly.details as Record<string, unknown> | null;
   const alertData = {
@@ -182,7 +182,7 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
     message: anomaly.message,
     costType: getCostTypeLabel(costRecord.costType),
     supplierName: costRecord.supplier.name,
-    locationName: costRecord.location.name,
+    locationName,
     amount: Number(costRecord.amount),
     expectedAmount: details?.['expectedValue'] as number | undefined,
     deviationPercent: details?.['deviationPercent'] as number | undefined,
@@ -197,12 +197,14 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
 
   switch (alert.channel) {
     case 'email':
-      const recipients = parseRecipients(alert.recipient);
-      result = await sendAnomalyAlertEmail({
-        recipientEmail: recipients.length > 0 ? recipients : alert.recipient,
-        recipientName: getRecipientName(recipients),
-        ...alertData,
-      } satisfies AnomalyAlertEmailData);
+      {
+        const recipients = parseRecipients(alert.recipient);
+        result = await sendAnomalyAlertEmail({
+          recipientEmail: recipients.length > 0 ? recipients : alert.recipient,
+          recipientName: getRecipientName(recipients),
+          ...alertData,
+        } satisfies AnomalyAlertEmailData);
+      }
       break;
 
     case 'slack':
@@ -257,25 +259,35 @@ async function processAlert(job: Job<AlertJobData>): Promise<void> {
 export function createAlertWorker(): Worker<AlertJobData> {
   const connection = createRedisConnection();
 
-  const worker = new Worker<AlertJobData>(
-    QUEUE_NAMES.ALERTS,
-    processAlert,
-    {
-      connection,
-      concurrency: 3,
-      limiter: {
-        max: 20,
-        duration: 1000, // 20 alerts per second max
-      },
-    }
-  );
+  const worker = new Worker<AlertJobData>(QUEUE_NAMES.ALERTS, processAlert, {
+    connection,
+    concurrency: 3,
+    limiter: {
+      max: 20,
+      duration: 1000, // 20 alerts per second max
+    },
+  });
 
   worker.on('completed', (job) => {
     console.log(`[AlertWorker] Job ${job.id} completed`);
+    backgroundJobsTotal.labels(QUEUE_NAMES.ALERTS, 'completed').inc();
+
+    if (job.processedOn && job.finishedOn) {
+      backgroundJobDuration
+        .labels(QUEUE_NAMES.ALERTS)
+        .observe((job.finishedOn - job.processedOn) / 1000);
+    }
   });
 
   worker.on('failed', (job, err) => {
     console.error(`[AlertWorker] Job ${job?.id} failed:`, err);
+    backgroundJobsTotal.labels(QUEUE_NAMES.ALERTS, 'failed').inc();
+
+    if (job?.processedOn && job?.finishedOn) {
+      backgroundJobDuration
+        .labels(QUEUE_NAMES.ALERTS)
+        .observe((job.finishedOn - job.processedOn) / 1000);
+    }
   });
 
   worker.on('error', (err) => {

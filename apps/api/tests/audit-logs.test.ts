@@ -149,7 +149,9 @@ describe('Audit Logs Routes', () => {
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
-      expect(body.data.every((log: { entityType: string }) => log.entityType === 'user')).toBe(true);
+      expect(body.data.every((log: { entityType: string }) => log.entityType === 'user')).toBe(
+        true,
+      );
     });
 
     it('should support filtering by action', async () => {

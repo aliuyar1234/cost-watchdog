@@ -1,11 +1,11 @@
-version: '3.8'
-
 # =============================================================================
 # Cost Watchdog - Development Infrastructure
 # =============================================================================
 # This compose file is for LOCAL DEVELOPMENT only.
 # For production, use managed services or create a production overlay.
 # =============================================================================
+
+name: cost-watchdog-dev
 
 services:
   postgres:
@@ -19,11 +19,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cost_watchdog}
     ports:
       # Bind to localhost only for security (remove in production)
-      - "127.0.0.1:5432:5432"
+      - '127.0.0.1:5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cost_watchdog}" ]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-cost_watchdog}']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -39,14 +39,15 @@ services:
     image: redis:7-alpine
     container_name: cost-watchdog-redis
     restart: unless-stopped
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # BullMQ expects noeviction; otherwise Redis can evict job data under memory pressure.
+    command: redis-server --maxmemory 256mb --maxmemory-policy noeviction --appendonly yes
     ports:
       # Bind to localhost only for security (remove in production)
-      - "127.0.0.1:6379:6379"
+      - '127.0.0.1:6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -69,13 +70,18 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_admin_dev}
     ports:
       # Bind to localhost only for security (remove in production)
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
     healthcheck:
-      test: [ "CMD", "mc", "ready", "local" ]
+      # `minio/minio` does not ship with curl/wget; prefer `mc ready` but fall back to HTTP health endpoint if available.
+      test:
+        [
+          'CMD-SHELL',
+          'if command -v curl >/dev/null 2>&1; then curl -fsS http://localhost:9000/minio/health/ready; elif command -v wget >/dev/null 2>&1; then wget -q --spider http://localhost:9000/minio/health/ready; elif command -v mc >/dev/null 2>&1; then mc alias set local http://localhost:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 && mc ready local >/dev/null 2>&1; else exit 1; fi',
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -87,17 +93,40 @@ services:
         reservations:
           memory: 128M
 
+  minio-init:
+    # The `minio/minio` release tags do not map 1:1 to `minio/mc` tags.
+    # Pin by digest for reproducible builds.
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    container_name: cost-watchdog-minio-init
+    depends_on:
+      - minio
+    restart: 'no'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio_admin_dev}
+      S3_BUCKET: ${S3_BUCKET:-cost-watchdog}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do
+        echo 'Waiting for MinIO...';
+        sleep 1;
+      done &&
+      mc mb --ignore-existing local/$${S3_BUCKET} &&
+      mc anonymous set none local/$${S3_BUCKET} &&
+      echo 'MinIO bucket ensured: '$${S3_BUCKET}
+      "
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
 
-    # =============================================================================
-    # Production Notes:
-    # =============================================================================
-    # 1. Use managed services (RDS, ElastiCache, S3) instead of containers
-    # 2. Remove port bindings - use internal Docker network only
-    # 3. Set POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD via secrets manager
-    # 4. Add proper network policies and TLS
-    # 5. Consider using Docker Swarm secrets or Kubernetes secrets
-    # =============================================================================
+# =============================================================================
+# Production Notes:
+# =============================================================================
+# 1. Use managed services (RDS, ElastiCache, S3) instead of containers
+# 2. Remove port bindings - use internal Docker network only
+# 3. Set POSTGRES_PASSWORD, MINIO_ROOT_PASSWORD via secrets manager
+# 4. Add proper network policies and TLS
+# 5. Consider using Docker Swarm secrets or Kubernetes secrets
+# =============================================================================

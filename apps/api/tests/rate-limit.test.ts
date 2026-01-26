@@ -18,7 +18,8 @@ vi.mock('../src/lib/redis.js', () => ({
 }));
 
 // Import after mock setup
-const { checkRateLimit, getRateLimitKey, createRateLimitHook, RATE_LIMITS } = await import('../src/lib/rate-limit.js');
+const { checkRateLimit, getRateLimitKey, createRateLimitHook, RATE_LIMITS } =
+  await import('../src/lib/rate-limit.js');
 
 describe('Rate Limiting', () => {
   beforeEach(() => {
@@ -196,7 +197,7 @@ describe('Rate Limiting', () => {
       expect(key).toBe('ip:192.168.1.100');
     });
 
-    it('uses X-Forwarded-For when IP not available', () => {
+    it('does not trust X-Forwarded-For when IP not available', () => {
       const mockRequest = {
         headers: { 'x-forwarded-for': '10.0.0.1' },
         user: undefined,
@@ -205,7 +206,7 @@ describe('Rate Limiting', () => {
 
       const key = getRateLimitKey(mockRequest);
 
-      expect(key).toBe('ip:10.0.0.1');
+      expect(key).toBe('ip:unknown');
     });
   });
 
@@ -271,7 +272,7 @@ describe('Rate Limiting', () => {
       expect(mockReply.send).toHaveBeenCalledWith(
         expect.objectContaining({
           error: 'Too Many Requests',
-        })
+        }),
       );
     });
 
@@ -350,8 +351,8 @@ describe('Rate Limit Security', () => {
     }
 
     // First 10 should be allowed, rest should be blocked
-    expect(attempts.slice(0, 10).every(a => a)).toBe(true);
-    expect(attempts.slice(10).every(a => !a)).toBe(true);
+    expect(attempts.slice(0, 10).every((a) => a)).toBe(true);
+    expect(attempts.slice(10).every((a) => !a)).toBe(true);
   });
 
   it('isolates rate limits per user', async () => {

@@ -4,12 +4,7 @@ import type { CostType } from '../../types';
 /**
  * Cost types that typically have seasonal patterns
  */
-const SEASONAL_COST_TYPES: CostType[] = [
-  'electricity',
-  'natural_gas',
-  'district_heating',
-  'water',
-];
+const SEASONAL_COST_TYPES: CostType[] = ['electricity', 'natural_gas', 'district_heating', 'water'];
 
 /**
  * Define seasonal patterns for different cost types
@@ -55,17 +50,18 @@ export const seasonalAnomalyCheck: AnomalyCheck = {
 
     // Calculate historical average for this cost type
     const historicalAmounts = context.historicalRecords
-      .filter(r =>
-        r.costType === record.costType &&
-        r.periodStart.getTime() < record.periodStart.getTime()
+      .filter(
+        (r) =>
+          r.costType === record.costType && r.periodStart.getTime() < record.periodStart.getTime(),
       )
-      .map(r => r.amount);
+      .map((r) => r.amount);
 
     if (historicalAmounts.length < 12) {
       return { triggered: false };
     }
 
-    const overallAverage = historicalAmounts.reduce((sum, val) => sum + val, 0) / historicalAmounts.length;
+    const overallAverage =
+      historicalAmounts.reduce((sum, val) => sum + val, 0) / historicalAmounts.length;
 
     if (overallAverage === 0) {
       return { triggered: false };

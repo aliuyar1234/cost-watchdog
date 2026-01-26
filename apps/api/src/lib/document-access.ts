@@ -46,7 +46,7 @@ export interface UserAccessContext {
  */
 export async function canAccessDocument(
   userId: string,
-  documentId: string
+  documentId: string,
 ): Promise<AccessCheckResult> {
   // Get user with access restrictions
   const user = await prisma.user.findUnique({
@@ -108,18 +108,19 @@ export async function canAccessDocument(
 
   // Check if any of the document's cost records match user's restrictions
   for (const record of costRecords) {
-    let locationMatch = true;
-    let costCenterMatch = true;
+    const locationMatch =
+      userLocations.length === 0
+        ? true
+        : record.locationId
+          ? userLocations.includes(record.locationId)
+          : false;
 
-    // Check location restriction
-    if (userLocations.length > 0 && record.locationId) {
-      locationMatch = userLocations.includes(record.locationId);
-    }
-
-    // Check cost center restriction
-    if (userCostCenters.length > 0 && record.costCenterId) {
-      costCenterMatch = userCostCenters.includes(record.costCenterId);
-    }
+    const costCenterMatch =
+      userCostCenters.length === 0
+        ? true
+        : record.costCenterId
+          ? userCostCenters.includes(record.costCenterId)
+          : false;
 
     // User has access if at least one cost record matches their restrictions
     if (locationMatch && costCenterMatch) {
@@ -129,7 +130,7 @@ export async function canAccessDocument(
 
   return {
     allowed: false,
-    reason: 'No matching cost records in user\'s allowed locations/cost centers',
+    reason: "No matching cost records in user's allowed locations/cost centers",
     document,
   };
 }
@@ -144,7 +145,7 @@ export async function canAccessDocument(
  */
 export async function canDeleteDocument(
   userId: string,
-  documentId: string
+  documentId: string,
 ): Promise<AccessCheckResult> {
   // First check basic access
   const accessResult = await canAccessDocument(userId, documentId);
@@ -197,7 +198,7 @@ export async function getAccessibleDocuments(
     orderBy?: 'uploadedAt' | 'filename';
     order?: 'asc' | 'desc';
     status?: string;
-  } = {}
+  } = {},
 ): Promise<{ documents: unknown[]; total: number }> {
   const { limit = 20, offset = 0, orderBy = 'uploadedAt', order = 'desc', status } = options;
   const statusFilter = status ? { extractionStatus: status } : {};
@@ -251,38 +252,16 @@ export async function getAccessibleDocuments(
   }
 
   // For restricted users, filter by associated cost records
-  // Get documents that have cost records in user's allowed locations/cost centers
-  // or documents with no cost records (unprocessed)
-  const locationFilter = userLocations.length > 0 ? { locationId: { in: userLocations } } : {};
-  const costCenterFilter = userCostCenters.length > 0 ? { costCenterId: { in: userCostCenters } } : {};
+  const costRecordWhere = {
+    ...(userLocations.length > 0 ? { locationId: { in: userLocations } } : {}),
+    ...(userCostCenters.length > 0 ? { costCenterId: { in: userCostCenters } } : {}),
+  };
 
-  // Find document IDs that have matching cost records
-  const accessibleDocumentIds = await prisma.costRecord.findMany({
-    where: {
-      AND: [locationFilter, costCenterFilter],
-      sourceDocumentId: { not: null },
-    },
-    select: { sourceDocumentId: true },
-    distinct: ['sourceDocumentId'],
-  });
-
-  const accessibleIds = accessibleDocumentIds.map((r) => r.sourceDocumentId).filter((id): id is string => id !== null);
-
-  // Also include documents with no cost records (unprocessed)
-  const documentsWithNoCostRecords = await prisma.document.findMany({
-    where: {
-      costRecords: { none: {} },
-    },
-    select: { id: true },
-  });
-
-  const unprocessedIds = documentsWithNoCostRecords.map((d) => d.id);
-
-  // Combine accessible IDs
-  const allAccessibleIds = [...new Set([...accessibleIds, ...unprocessedIds])];
-
-  // Build where clause using accessible IDs
-  const whereClause = { id: { in: allAccessibleIds }, ...statusFilter };
+  // Include documents where at least one cost record matches restrictions, plus unprocessed docs.
+  const whereClause = {
+    ...statusFilter,
+    OR: [{ costRecords: { some: costRecordWhere } }, { costRecords: { none: {} } }],
+  };
 
   const [documents, total] = await Promise.all([
     prisma.document.findMany({

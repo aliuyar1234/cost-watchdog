@@ -1,5 +1,10 @@
 import { prisma } from '../lib/db.js';
-import { queueExtraction, queueAnomalyDetection, queueAlert, queueAggregation } from '../lib/queues.js';
+import {
+  queueExtraction,
+  queueAnomalyDetection,
+  queueAlert,
+  queueAggregation,
+} from '../lib/queues.js';
 import { loadAlertSettings, shouldNotifySeverity } from '../lib/alert-settings.js';
 import { resolveUserNotificationSettings } from '../lib/notification-settings.js';
 
@@ -13,12 +18,15 @@ export interface OutboxPollerConfig {
   batchSize?: number;
   /** Maximum retry attempts before dead-letter */
   maxAttempts?: number;
+  /** Maximum number of events to process concurrently */
+  concurrency?: number;
 }
 
 const DEFAULT_CONFIG: Required<OutboxPollerConfig> = {
   pollInterval: 1000,
   batchSize: 100,
   maxAttempts: 5,
+  concurrency: 5,
 };
 
 const RECIPIENT_CACHE_TTL_MS = 60 * 1000;
@@ -77,7 +85,7 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
         mimeType: event.payload['mimeType'] as string,
         filename: event.payload['filename'] as string,
       },
-      event.id
+      event.id,
     );
   },
   'document.extraction_retry': async (event) => {
@@ -87,7 +95,7 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
         storagePath: event.payload['storagePath'] as string,
         mimeType: event.payload['mimeType'] as string,
       },
-      event.id
+      event.id,
     );
   },
   'cost_record.created': async (event) => {
@@ -97,7 +105,7 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
         costRecordId: event.payload['costRecordId'] as string,
         isBackfill: event.payload['isBackfill'] as boolean,
       },
-      event.id
+      event.id,
     );
 
     // Queue aggregation update
@@ -106,15 +114,35 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
         costRecordId: event.payload['costRecordId'] as string,
         type: 'update',
       },
-      event.id
+      event.id,
     );
   },
   'anomaly.detected': async (event) => {
     // Create alert record and queue for sending
-    const anomalyId = event.aggregateId;
     const costRecordId = event.payload['costRecordId'] as string;
     const severity = event.payload['severity'] as string;
     const message = event.payload['message'] as string;
+    const type = event.payload['type'] as string | undefined;
+    let anomalyId = event.payload['anomalyId'] as string | undefined;
+
+    if (!anomalyId) {
+      if (!type) {
+        console.warn('[OutboxPoller] Missing anomalyId and type for anomaly.detected event');
+        return;
+      }
+      const anomalyRecord = await prisma.anomaly.findUnique({
+        where: { costRecordId_type: { costRecordId, type } },
+        select: { id: true },
+      });
+      if (!anomalyRecord) {
+        console.warn('[OutboxPoller] Anomaly not found for alert creation', {
+          costRecordId,
+          type,
+        });
+        return;
+      }
+      anomalyId = anomalyRecord.id;
+    }
 
     const alertSettings = await loadAlertSettings();
 
@@ -157,17 +185,20 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
       select: { channel: true },
     });
     const existingChannels = new Set(existingAlerts.map((alert) => alert.channel));
+    const singleEmailRecipientId =
+      emailRecipients.length === 1 ? (emailRecipients[0]?.id ?? null) : null;
 
     for (const channel of channels) {
       if (existingChannels.has(channel)) {
         continue;
       }
 
-      const recipient = channel === 'email'
-        ? emailRecipientList
-        : channel === 'slack'
-          ? slackWebhookUrl
-          : teamsWebhookUrl;
+      const recipient =
+        channel === 'email'
+          ? emailRecipientList
+          : channel === 'slack'
+            ? slackWebhookUrl
+            : teamsWebhookUrl;
 
       if (!recipient) {
         continue;
@@ -176,9 +207,7 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
       const alert = await prisma.alert.create({
         data: {
           anomalyId,
-          userId: channel === 'email' && emailRecipients.length === 1
-            ? emailRecipients[0].id
-            : null,
+          userId: channel === 'email' ? singleEmailRecipientId : null,
           channel,
           recipient,
           subject: `[${getSeverityLabel(severity)}] Kostenanomalie: ${message}`,
@@ -193,7 +222,7 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
           anomalyId,
           costRecordId,
         },
-        event.id
+        event.id,
       );
     }
   },
@@ -212,7 +241,7 @@ const EVENT_HANDLERS: Record<string, (event: OutboxEventData) => Promise<void>> 
         anomalyId: alert.anomalyId,
         costRecordId: alert.anomaly.costRecordId,
       },
-      event.id
+      event.id,
     );
   },
 };
@@ -334,8 +363,9 @@ export class OutboxPoller {
 
     console.log(`[OutboxPoller] Processing ${events.length} events`);
 
-    for (const event of events) {
-      await this.processEvent(event);
+    for (let i = 0; i < events.length; i += this.config.concurrency) {
+      const slice = events.slice(i, i + this.config.concurrency);
+      await Promise.all(slice.map((event) => this.processEvent(event)));
     }
   }
 
@@ -417,7 +447,7 @@ export class OutboxPoller {
     });
 
     console.log(
-      `[OutboxPoller] Scheduled retry ${newAttempts}/${this.config.maxAttempts} for event ${eventId} at ${nextAttemptAt.toISOString()}`
+      `[OutboxPoller] Scheduled retry ${newAttempts}/${this.config.maxAttempts} for event ${eventId} at ${nextAttemptAt.toISOString()}`,
     );
   }
 }

@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import './env.js';
 
 /**
  * Docker Secrets Reader
@@ -58,8 +59,8 @@ export function readRequiredSecret(name: string, envVarName?: string): string {
     const envName = envVarName || name.toUpperCase().replace(/-/g, '_');
     throw new Error(
       `FATAL: Secret '${name}' not found. ` +
-      `Provide via Docker secret at ${join(SECRETS_PATH, name)} ` +
-      `or environment variable ${envName}.`
+        `Provide via Docker secret at ${join(SECRETS_PATH, name)} ` +
+        `or environment variable ${envName}.`,
     );
   }
 

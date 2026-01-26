@@ -194,7 +194,7 @@ const PROMPT_VERSION = '1.0.0';
  */
 export async function extractWithLLM(
   text: string,
-  config: LLMExtractionConfig
+  config: LLMExtractionConfig,
 ): Promise<LLMExtractionResult> {
   const model = config.model || 'claude-sonnet-4-20250514';
   const temperature = config.temperature ?? 0;
@@ -209,7 +209,8 @@ export async function extractWithLLM(
     });
 
     // Truncate text if too long (keep first ~15k chars for context window)
-    const truncatedText = text.length > 15000 ? text.substring(0, 15000) + '\n...[truncated]' : text;
+    const truncatedText =
+      text.length > 15000 ? text.substring(0, 15000) + '\n...[truncated]' : text;
 
     const response = await client.messages.create({
       model,
@@ -258,7 +259,7 @@ export async function extractWithLLM(
     // Calculate confidence based on completeness
     const requiredFields = ['amount', 'periodStart', 'periodEnd', 'costType', 'supplierName'];
     const presentRequired = requiredFields.filter(
-      (f) => record[f as keyof typeof record] !== undefined
+      (f) => record[f as keyof typeof record] !== undefined,
     ).length;
     const baseConfidence = presentRequired / requiredFields.length;
 
@@ -271,7 +272,7 @@ export async function extractWithLLM(
       'customerNumber',
     ];
     const presentOptional = optionalFields.filter(
-      (f) => record[f as keyof typeof record] !== undefined
+      (f) => record[f as keyof typeof record] !== undefined,
     ).length;
     const optionalBonus = (presentOptional / optionalFields.length) * 0.2;
 

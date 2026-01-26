@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import {
   BarChart,
   Bar,
@@ -19,22 +20,34 @@ interface YearComparisonChartProps {
 }
 
 const MONTH_NAMES = [
-  'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez',
+  'Jan',
+  'Feb',
+  'Mär',
+  'Apr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Dez',
 ];
 
 export function YearComparisonChart({ data, isLoading }: YearComparisonChartProps) {
+  const descriptionId = useId();
+
   if (isLoading) {
     return (
-      <div className="h-80 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      <div className="flex h-80 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
 
   if (!data || data.months.length === 0) {
     return (
-      <div className="h-80 flex items-center justify-center text-gray-500">
+      <div className="flex h-80 items-center justify-center text-gray-500">
         Keine Daten verfügbar
       </div>
     );
@@ -47,45 +60,56 @@ export function YearComparisonChart({ data, isLoading }: YearComparisonChartProp
     change: m.change,
   }));
 
+  const totalCurrent = data.months.reduce((sum, m) => sum + m.currentYear, 0);
+  const totalPrevious = data.months.reduce((sum, m) => sum + m.previousYear, 0);
+  const delta = totalCurrent - totalPrevious;
+  const direction = delta === 0 ? 'gleich geblieben' : delta > 0 ? 'gestiegen' : 'gesunken';
+  const summary = `Jahresvergleich ${data.year} vs ${data.year - 1}: ${formatCurrency(totalCurrent)} vs ${formatCurrency(totalPrevious)} (${direction}).`;
+
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-        <XAxis
-          dataKey="month"
-          tick={{ fontSize: 12 }}
-          tickLine={false}
-          axisLine={{ stroke: '#e5e7eb' }}
-        />
-        <YAxis
-          tick={{ fontSize: 12 }}
-          tickLine={false}
-          axisLine={{ stroke: '#e5e7eb' }}
-          tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
-        />
-        <Tooltip
-          formatter={(value: number) => formatCurrency(value)}
-          contentStyle={{
-            backgroundColor: 'white',
-            border: '1px solid #e5e7eb',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          }}
-        />
-        <Legend />
-        <Bar
-          dataKey={String(data.year - 1)}
-          name={`${data.year - 1}`}
-          fill="#94a3b8"
-          radius={[4, 4, 0, 0]}
-        />
-        <Bar
-          dataKey={String(data.year)}
-          name={`${data.year}`}
-          fill="#3b82f6"
-          radius={[4, 4, 0, 0]}
-        />
-      </BarChart>
-    </ResponsiveContainer>
+    <div role="img" aria-label="Jahresvergleich" aria-describedby={descriptionId}>
+      <p id={descriptionId} className="sr-only">
+        {summary}
+      </p>
+      <ResponsiveContainer width="100%" height={320}>
+        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis
+            dataKey="month"
+            tick={{ fontSize: 12 }}
+            tickLine={false}
+            axisLine={{ stroke: '#e5e7eb' }}
+          />
+          <YAxis
+            tick={{ fontSize: 12 }}
+            tickLine={false}
+            axisLine={{ stroke: '#e5e7eb' }}
+            tickFormatter={(value) => `€${(value / 1000).toFixed(0)}k`}
+          />
+          <Tooltip
+            formatter={(value: number) => formatCurrency(value)}
+            contentStyle={{
+              backgroundColor: 'white',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            }}
+          />
+          <Legend />
+          <Bar
+            dataKey={String(data.year - 1)}
+            name={`${data.year - 1}`}
+            fill="#94a3b8"
+            radius={[4, 4, 0, 0]}
+          />
+          <Bar
+            dataKey={String(data.year)}
+            name={`${data.year}`}
+            fill="#3b82f6"
+            radius={[4, 4, 0, 0]}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

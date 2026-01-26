@@ -14,11 +14,11 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function main() {
-  console.log('🌱 Seeding database...\n');
+  console.log('Seeding database...\n');
 
   // Create admin user
   const adminPassword = await hashPassword('Admin123!');
-  const admin = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { email: 'admin@example.com' },
     update: {},
     create: {
@@ -31,7 +31,7 @@ async function main() {
       isActive: true,
     },
   });
-  console.log('✅ Admin user created: admin@example.com / Admin123!');
+  console.log('Admin user created: admin@example.com / Admin123!');
 
   // Create organization
   const org = await prisma.organization.upsert({
@@ -45,7 +45,7 @@ async function main() {
       employeeCount: 150,
     },
   });
-  console.log('✅ Organization created: Demo GmbH');
+  console.log('Organization created: Demo GmbH');
 
   // Create locations
   const locations = await Promise.all([
@@ -110,7 +110,7 @@ async function main() {
       },
     }),
   ]);
-  console.log(`✅ ${locations.length} Locations created`);
+  console.log(`${locations.length} Locations created`);
 
   // Create cost centers
   const costCenters = await Promise.all([
@@ -143,7 +143,7 @@ async function main() {
       },
     }),
   ]);
-  console.log(`✅ ${costCenters.length} Cost Centers created`);
+  console.log(`${costCenters.length} Cost Centers created`);
 
   // Create suppliers
   const suppliers = await Promise.all([
@@ -200,7 +200,7 @@ async function main() {
       },
     }),
   ]);
-  console.log(`✅ ${suppliers.length} Suppliers created`);
+  console.log(`${suppliers.length} Suppliers created`);
 
   // Create cost records for the last 12 months
   const costRecords: Prisma.CostRecordCreateManyInput[] = [];
@@ -213,7 +213,7 @@ async function main() {
     // Electricity costs for each location
     for (const location of locations) {
       const baseAmount = location.name.includes('Lager') ? 2500 : 1200;
-      const seasonalFactor = 1 + 0.2 * Math.sin((periodStart.getMonth() - 6) * Math.PI / 6);
+      const seasonalFactor = 1 + 0.2 * Math.sin(((periodStart.getMonth() - 6) * Math.PI) / 6);
       const randomFactor = 0.9 + Math.random() * 0.2;
       const amount = baseAmount * seasonalFactor * randomFactor;
       const quantity = amount / 0.35; // ~0.35 EUR/kWh
@@ -241,9 +241,9 @@ async function main() {
     }
 
     // Gas costs (only for main office and warehouse)
-    for (const location of locations.filter(l => !l.name.includes('München'))) {
+    for (const location of locations.filter((l) => !l.name.includes('München'))) {
       const baseAmount = location.name.includes('Lager') ? 1800 : 900;
-      const seasonalFactor = 1 + 0.5 * Math.cos((periodStart.getMonth() - 0) * Math.PI / 6);
+      const seasonalFactor = 1 + 0.5 * Math.cos(((periodStart.getMonth() - 0) * Math.PI) / 6);
       const randomFactor = 0.9 + Math.random() * 0.2;
       const amount = baseAmount * seasonalFactor * randomFactor;
       const quantity = amount / 0.12;
@@ -294,7 +294,7 @@ async function main() {
     }
 
     // Water costs (Berlin only)
-    const berlinLocation = locations.find(l => l.name.includes('Berlin'));
+    const berlinLocation = locations.find((l) => l.name.includes('Berlin'));
     if (berlinLocation) {
       const baseAmount = 350;
       const randomFactor = 0.9 + Math.random() * 0.2;
@@ -316,7 +316,7 @@ async function main() {
         pricePerUnit: new Prisma.Decimal('5.50'),
         costType: 'water',
         costCategory: 'utilities',
-        confidence: 0.90,
+        confidence: 0.9,
         dataQuality: 'extracted',
         isVerified: monthsAgo > 1,
       });
@@ -351,7 +351,7 @@ async function main() {
     data: costRecords,
     skipDuplicates: true,
   });
-  console.log(`✅ ${costRecords.length} Cost Records created`);
+  console.log(`${costRecords.length} Cost Records created`);
 
   // Create anomaly for the spike
   const spikeRecord = await prisma.costRecord.findFirst({
@@ -380,7 +380,7 @@ async function main() {
         status: 'new',
       },
     });
-    console.log('✅ 1 Anomaly created');
+    console.log('1 Anomaly created');
   }
 
   // Create app settings
@@ -417,9 +417,9 @@ async function main() {
       },
     },
   });
-  console.log('✅ App Settings created');
+  console.log('App Settings created');
 
-  console.log('\n🎉 Seeding completed!\n');
+  console.log('\nSeeding completed!\n');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('Login credentials:');
   console.log('  Email:    admin@example.com');
@@ -429,7 +429,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Seeding failed:', e);
+    console.error('Seeding failed:', e);
     process.exit(1);
   })
   .finally(async () => {

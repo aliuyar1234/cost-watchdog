@@ -38,13 +38,13 @@ All errors return JSON with \`error\` and \`message\` fields:
 }
 \`\`\`
     `.trim(),
-    version: '1.0.0',
+    version: '0.1.0',
     contact: {
       name: 'Cost Watchdog Support',
       email: 'support@costwatchdog.de',
     },
     license: {
-      name: 'Proprietary',
+      name: 'MIT',
     },
   },
   servers: [
@@ -102,7 +102,11 @@ All errors return JSON with \`error\` and \`message\` fields:
         type: 'object',
         properties: {
           id: { type: 'string', format: 'uuid' },
-          type: { type: 'string', enum: ['yoy_deviation', 'mom_deviation', 'price_per_unit_spike', 'statistical_outlier', 'budget_exceeded', 'contract_term_anomaly', 'supplier_rate_change', 'missing_invoice'] },
+          type: {
+            type: 'string',
+            description:
+              'Anomaly type identifier (string). Example values: yoy_deviation, mom_deviation, price_per_unit_spike, statistical_outlier, budget_exceeded.',
+          },
           severity: { type: 'string', enum: ['info', 'warning', 'critical'] },
           status: { type: 'string', enum: ['new', 'acknowledged', 'resolved', 'false_positive'] },
           message: { type: 'string' },
@@ -228,11 +232,19 @@ All errors return JSON with \`error\` and \`message\` fields:
         properties: {
           id: { type: 'string', format: 'uuid' },
           filename: { type: 'string' },
+          originalFilename: { type: 'string' },
           mimeType: { type: 'string' },
-          size: { type: 'integer' },
-          extractionStatus: { type: 'string', enum: ['pending', 'processing', 'completed', 'failed'] },
+          fileSize: { type: 'integer' },
+          extractionStatus: {
+            type: 'string',
+            enum: ['pending', 'processing', 'completed', 'failed', 'manual'],
+          },
+          verificationStatus: {
+            type: 'string',
+            enum: ['pending', 'auto_verified', 'manually_verified', 'rejected'],
+          },
           uploadedAt: { type: 'string', format: 'date-time' },
-          processedAt: { type: 'string', format: 'date-time', nullable: true },
+          extractedAt: { type: 'string', format: 'date-time', nullable: true },
         },
       },
       ApiKey: {
@@ -309,7 +321,8 @@ All errors return JSON with \`error\` and \`message\` fields:
       post: {
         tags: ['Authentication'],
         summary: 'Register a new user',
-        description: 'First registered user becomes admin automatically',
+        description:
+          'If INITIAL_ADMIN_EMAIL is set, the first user to register with that email becomes an admin. Otherwise new users are created with the viewer role.',
         requestBody: {
           required: true,
           content: {
@@ -337,6 +350,7 @@ All errors return JSON with \`error\` and \`message\` fields:
                   properties: {
                     user: { $ref: '#/components/schemas/User' },
                     accessToken: { type: 'string' },
+                    refreshToken: { type: 'string' },
                   },
                 },
               },
@@ -374,7 +388,70 @@ All errors return JSON with \`error\` and \`message\` fields:
                   type: 'object',
                   properties: {
                     accessToken: { type: 'string' },
+                    refreshToken: { type: 'string' },
                     user: { $ref: '#/components/schemas/User' },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/auth/refresh': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Refresh access token',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  refreshToken: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Token refresh successful',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    accessToken: { type: 'string' },
+                    refreshToken: { type: 'string' },
+                    sessionId: { type: 'string', format: 'uuid' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/auth/logout': {
+      post: {
+        tags: ['Authentication'],
+        summary: 'Logout (invalidate current session)',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Logout successful',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    message: { type: 'string' },
                   },
                 },
               },
@@ -398,6 +475,14 @@ All errors return JSON with \`error\` and \`message\` fields:
                   type: 'object',
                   properties: {
                     user: { $ref: '#/components/schemas/User' },
+                    app: {
+                      type: 'object',
+                      nullable: true,
+                      properties: {
+                        name: { type: 'string' },
+                        plan: { type: 'string' },
+                      },
+                    },
                   },
                 },
               },
@@ -413,8 +498,16 @@ All errors return JSON with \`error\` and \`message\` fields:
         summary: 'List anomalies',
         security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
         parameters: [
-          { name: 'status', in: 'query', schema: { type: 'string', enum: ['new', 'acknowledged', 'resolved', 'false_positive'] } },
-          { name: 'severity', in: 'query', schema: { type: 'string', enum: ['info', 'warning', 'critical'] } },
+          {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['new', 'acknowledged', 'resolved', 'false_positive'] },
+          },
+          {
+            name: 'severity',
+            in: 'query',
+            schema: { type: 'string', enum: ['info', 'warning', 'critical'] },
+          },
           { name: 'type', in: 'query', schema: { type: 'string' } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
           { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
@@ -472,7 +565,10 @@ All errors return JSON with \`error\` and \`message\` fields:
               schema: {
                 type: 'object',
                 properties: {
-                  status: { type: 'string', enum: ['new', 'acknowledged', 'resolved', 'false_positive'] },
+                  status: {
+                    type: 'string',
+                    enum: ['new', 'acknowledged', 'resolved', 'false_positive'],
+                  },
                   resolution: { type: 'string' },
                 },
               },
@@ -530,9 +626,7 @@ All errors return JSON with \`error\` and \`message\` fields:
         tags: ['Analytics'],
         summary: 'Get dashboard KPIs',
         security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
-        parameters: [
-          { name: 'year', in: 'query', schema: { type: 'integer' } },
-        ],
+        parameters: [{ name: 'year', in: 'query', schema: { type: 'integer' } }],
         responses: {
           200: {
             description: 'Dashboard data',
@@ -580,7 +674,11 @@ All errors return JSON with \`error\` and \`message\` fields:
         summary: 'Export cost records',
         security: [{ BearerAuth: [] }, { ApiKeyAuth: [] }],
         parameters: [
-          { name: 'format', in: 'query', schema: { type: 'string', enum: ['csv', 'json'], default: 'csv' } },
+          {
+            name: 'format',
+            in: 'query',
+            schema: { type: 'string', enum: ['csv', 'json'], default: 'csv' },
+          },
           { name: 'year', in: 'query', schema: { type: 'integer' } },
           { name: 'month', in: 'query', schema: { type: 'integer' } },
           { name: 'costType', in: 'query', schema: { type: 'string' } },
@@ -654,7 +752,10 @@ All errors return JSON with \`error\` and \`message\` fields:
                   password: { type: 'string', minLength: 8 },
                   firstName: { type: 'string' },
                   lastName: { type: 'string' },
-                  role: { type: 'string', enum: ['admin', 'manager', 'analyst', 'viewer', 'auditor'] },
+                  role: {
+                    type: 'string',
+                    enum: ['admin', 'manager', 'analyst', 'viewer', 'auditor'],
+                  },
                   allowedLocationIds: { type: 'array', items: { type: 'string' } },
                   allowedCostCenterIds: { type: 'array', items: { type: 'string' } },
                 },
@@ -676,8 +777,8 @@ All errors return JSON with \`error\` and \`message\` fields:
         },
       },
     },
-      '/api-keys': {
-        get: {
+    '/api-keys': {
+      get: {
         tags: ['API Keys'],
         summary: 'List API keys (Admin only)',
         security: [{ BearerAuth: [] }],
@@ -763,72 +864,72 @@ All errors return JSON with \`error\` and \`message\` fields:
           400: { $ref: '#/components/responses/BadRequest' },
           403: { $ref: '#/components/responses/Forbidden' },
         },
-        },
       },
-      '/notification-settings': {
-        get: {
-          tags: ['Notification Settings'],
-          summary: 'Get current user notification settings',
-          security: [{ BearerAuth: [] }],
-          responses: {
-            200: {
-              description: 'Notification settings',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      settings: { $ref: '#/components/schemas/NotificationSettings' },
-                    },
-                  },
-                },
-              },
-            },
-            401: { $ref: '#/components/responses/Unauthorized' },
-          },
-        },
-        put: {
-          tags: ['Notification Settings'],
-          summary: 'Update current user notification settings',
-          security: [{ BearerAuth: [] }],
-          requestBody: {
-            required: true,
+    },
+    '/notification-settings': {
+      get: {
+        tags: ['Notification Settings'],
+        summary: 'Get current user notification settings',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Notification settings',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
                   properties: {
-                    emailAlertsEnabled: { type: 'boolean' },
-                    dailyDigestEnabled: { type: 'boolean' },
-                  },
-                  additionalProperties: false,
-                },
-              },
-            },
-          },
-          responses: {
-            200: {
-              description: 'Notification settings updated',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      success: { type: 'boolean' },
-                      settings: { $ref: '#/components/schemas/NotificationSettings' },
-                    },
+                    settings: { $ref: '#/components/schemas/NotificationSettings' },
                   },
                 },
               },
             },
-            400: { $ref: '#/components/responses/BadRequest' },
-            401: { $ref: '#/components/responses/Unauthorized' },
           },
+          401: { $ref: '#/components/responses/Unauthorized' },
         },
       },
-      '/settings': {
-        get: {
-          tags: ['Settings'],
+      put: {
+        tags: ['Notification Settings'],
+        summary: 'Update current user notification settings',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  emailAlertsEnabled: { type: 'boolean' },
+                  dailyDigestEnabled: { type: 'boolean' },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Notification settings updated',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean' },
+                    settings: { $ref: '#/components/schemas/NotificationSettings' },
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: '#/components/responses/BadRequest' },
+          401: { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/settings': {
+      get: {
+        tags: ['Settings'],
         summary: 'Get alert and threshold settings (Admin only)',
         security: [{ BearerAuth: [] }],
         responses: {
@@ -1110,34 +1211,46 @@ function jsonToYaml(obj: unknown, indent = 0): string {
   if (obj === undefined) return '';
   if (typeof obj === 'string') {
     if (obj.includes('\n') || obj.includes(':') || obj.includes('#')) {
-      return `|\n${obj.split('\n').map(line => spaces + '  ' + line).join('\n')}`;
+      return `|\n${obj
+        .split('\n')
+        .map((line) => spaces + '  ' + line)
+        .join('\n')}`;
     }
     return obj.includes(' ') || obj.includes(',') ? `"${obj}"` : obj;
   }
   if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj);
   if (Array.isArray(obj)) {
     if (obj.length === 0) return '[]';
-    return obj.map(item => {
-      const val = jsonToYaml(item, indent + 1);
-      if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-        return `\n${spaces}- ${val.trim().split('\n').join(`\n${spaces}  `)}`;
-      }
-      return `\n${spaces}- ${val}`;
-    }).join('');
+    return obj
+      .map((item) => {
+        const val = jsonToYaml(item, indent + 1);
+        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+          return `\n${spaces}- ${val.trim().split('\n').join(`\n${spaces}  `)}`;
+        }
+        return `\n${spaces}- ${val}`;
+      })
+      .join('');
   }
   if (typeof obj === 'object') {
     const entries = Object.entries(obj);
     if (entries.length === 0) return '{}';
-    return entries.map(([key, value]) => {
-      const val = jsonToYaml(value, indent + 1);
-      if (typeof value === 'object' && value !== null && !Array.isArray(value) && Object.keys(value).length > 0) {
-        return `${indent > 0 ? '\n' : ''}${spaces}${key}:${val}`;
-      }
-      if (Array.isArray(value) && value.length > 0) {
-        return `${indent > 0 ? '\n' : ''}${spaces}${key}:${val}`;
-      }
-      return `${indent > 0 ? '\n' : ''}${spaces}${key}: ${val}`;
-    }).join('');
+    return entries
+      .map(([key, value]) => {
+        const val = jsonToYaml(value, indent + 1);
+        if (
+          typeof value === 'object' &&
+          value !== null &&
+          !Array.isArray(value) &&
+          Object.keys(value).length > 0
+        ) {
+          return `${indent > 0 ? '\n' : ''}${spaces}${key}:${val}`;
+        }
+        if (Array.isArray(value) && value.length > 0) {
+          return `${indent > 0 ? '\n' : ''}${spaces}${key}:${val}`;
+        }
+        return `${indent > 0 ? '\n' : ''}${spaces}${key}: ${val}`;
+      })
+      .join('');
   }
   return '';
 }

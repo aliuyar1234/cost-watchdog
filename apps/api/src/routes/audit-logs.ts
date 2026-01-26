@@ -34,10 +34,7 @@ interface AuditLogIdParams {
 
 const ALLOWED_ROLES = ['admin', 'auditor'];
 
-async function requireAuditAccess(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+async function requireAuditAccess(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!request.user) {
     return reply.code(401).send({
       error: 'Unauthorized',
@@ -142,7 +139,7 @@ export default async function auditLogRoutes(fastify: FastifyInstance): Promise<
           message: 'Failed to query audit logs',
         });
       }
-    }
+    },
   );
 
   /**
@@ -212,6 +209,6 @@ export default async function auditLogRoutes(fastify: FastifyInstance): Promise<
           message: 'Failed to get audit log entry',
         });
       }
-    }
+    },
   );
 }

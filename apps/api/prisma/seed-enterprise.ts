@@ -31,40 +31,256 @@ const COMPANY = {
 
 // Realistic German locations
 const LOCATIONS_DATA = [
-  { name: 'Hauptverwaltung Frankfurt', code: 'FRA-HQ', city: 'Frankfurt am Main', postalCode: '60311', street: 'Mainzer Landstraße 50', type: 'office', grossFloorArea: 12500, ownership: 'leased' },
-  { name: 'Produktionswerk Wolfsburg', code: 'WOB-P1', city: 'Wolfsburg', postalCode: '38440', street: 'Industriestraße 100', type: 'production', grossFloorArea: 45000, ownership: 'owned' },
-  { name: 'Produktionswerk Stuttgart', code: 'STR-P2', city: 'Stuttgart', postalCode: '70469', street: 'Porschestraße 15', type: 'production', grossFloorArea: 38000, ownership: 'owned' },
-  { name: 'Logistikzentrum Hamburg', code: 'HAM-LOG', city: 'Hamburg', postalCode: '20457', street: 'Am Sandtorkai 77', type: 'warehouse', grossFloorArea: 65000, ownership: 'leased' },
-  { name: 'Logistikzentrum München', code: 'MUC-LOG', city: 'München', postalCode: '85748', street: 'Logistikring 8', type: 'warehouse', grossFloorArea: 42000, ownership: 'leased' },
-  { name: 'Vertriebsbüro Berlin', code: 'BER-SALES', city: 'Berlin', postalCode: '10117', street: 'Friedrichstraße 191', type: 'office', grossFloorArea: 3200, ownership: 'leased' },
-  { name: 'Vertriebsbüro Düsseldorf', code: 'DUS-SALES', city: 'Düsseldorf', postalCode: '40213', street: 'Königsallee 60', type: 'office', grossFloorArea: 2800, ownership: 'leased' },
-  { name: 'F&E Zentrum Dresden', code: 'DRS-RD', city: 'Dresden', postalCode: '01069', street: 'Technologiepark 12', type: 'office', grossFloorArea: 8500, ownership: 'leased' },
-  { name: 'Rechenzentrum Frankfurt', code: 'FRA-DC', city: 'Frankfurt am Main', postalCode: '60486', street: 'Lyoner Straße 25', type: 'data_center', grossFloorArea: 4200, ownership: 'leased' },
-  { name: 'Außenlager Köln', code: 'CGN-WH', city: 'Köln', postalCode: '50858', street: 'Am Eifeltor 5', type: 'warehouse', grossFloorArea: 18000, ownership: 'leased' },
-  { name: 'Servicezentrum Leipzig', code: 'LEJ-SVC', city: 'Leipzig', postalCode: '04103', street: 'Augustusplatz 9', type: 'office', grossFloorArea: 2200, ownership: 'leased' },
-  { name: 'Schulungszentrum Nürnberg', code: 'NUE-TRN', city: 'Nürnberg', postalCode: '90402', street: 'Königstraße 2', type: 'office', grossFloorArea: 1800, ownership: 'leased' },
+  {
+    name: 'Hauptverwaltung Frankfurt',
+    code: 'FRA-HQ',
+    city: 'Frankfurt am Main',
+    postalCode: '60311',
+    street: 'Mainzer Landstraße 50',
+    type: 'office',
+    grossFloorArea: 12500,
+    ownership: 'leased',
+  },
+  {
+    name: 'Produktionswerk Wolfsburg',
+    code: 'WOB-P1',
+    city: 'Wolfsburg',
+    postalCode: '38440',
+    street: 'Industriestraße 100',
+    type: 'production',
+    grossFloorArea: 45000,
+    ownership: 'owned',
+  },
+  {
+    name: 'Produktionswerk Stuttgart',
+    code: 'STR-P2',
+    city: 'Stuttgart',
+    postalCode: '70469',
+    street: 'Porschestraße 15',
+    type: 'production',
+    grossFloorArea: 38000,
+    ownership: 'owned',
+  },
+  {
+    name: 'Logistikzentrum Hamburg',
+    code: 'HAM-LOG',
+    city: 'Hamburg',
+    postalCode: '20457',
+    street: 'Am Sandtorkai 77',
+    type: 'warehouse',
+    grossFloorArea: 65000,
+    ownership: 'leased',
+  },
+  {
+    name: 'Logistikzentrum München',
+    code: 'MUC-LOG',
+    city: 'München',
+    postalCode: '85748',
+    street: 'Logistikring 8',
+    type: 'warehouse',
+    grossFloorArea: 42000,
+    ownership: 'leased',
+  },
+  {
+    name: 'Vertriebsbüro Berlin',
+    code: 'BER-SALES',
+    city: 'Berlin',
+    postalCode: '10117',
+    street: 'Friedrichstraße 191',
+    type: 'office',
+    grossFloorArea: 3200,
+    ownership: 'leased',
+  },
+  {
+    name: 'Vertriebsbüro Düsseldorf',
+    code: 'DUS-SALES',
+    city: 'Düsseldorf',
+    postalCode: '40213',
+    street: 'Königsallee 60',
+    type: 'office',
+    grossFloorArea: 2800,
+    ownership: 'leased',
+  },
+  {
+    name: 'F&E Zentrum Dresden',
+    code: 'DRS-RD',
+    city: 'Dresden',
+    postalCode: '01069',
+    street: 'Technologiepark 12',
+    type: 'office',
+    grossFloorArea: 8500,
+    ownership: 'leased',
+  },
+  {
+    name: 'Rechenzentrum Frankfurt',
+    code: 'FRA-DC',
+    city: 'Frankfurt am Main',
+    postalCode: '60486',
+    street: 'Lyoner Straße 25',
+    type: 'data_center',
+    grossFloorArea: 4200,
+    ownership: 'leased',
+  },
+  {
+    name: 'Außenlager Köln',
+    code: 'CGN-WH',
+    city: 'Köln',
+    postalCode: '50858',
+    street: 'Am Eifeltor 5',
+    type: 'warehouse',
+    grossFloorArea: 18000,
+    ownership: 'leased',
+  },
+  {
+    name: 'Servicezentrum Leipzig',
+    code: 'LEJ-SVC',
+    city: 'Leipzig',
+    postalCode: '04103',
+    street: 'Augustusplatz 9',
+    type: 'office',
+    grossFloorArea: 2200,
+    ownership: 'leased',
+  },
+  {
+    name: 'Schulungszentrum Nürnberg',
+    code: 'NUE-TRN',
+    city: 'Nürnberg',
+    postalCode: '90402',
+    street: 'Königstraße 2',
+    type: 'office',
+    grossFloorArea: 1800,
+    ownership: 'leased',
+  },
 ];
 
 // Realistic German suppliers
 const SUPPLIERS_DATA = [
-  { name: 'E.ON Energie Deutschland GmbH', shortName: 'E.ON', taxId: 'DE811190411', category: 'energy_electricity', costTypes: ['electricity'] },
-  { name: 'Vattenfall Europe Sales GmbH', shortName: 'Vattenfall', taxId: 'DE246575638', category: 'energy_electricity', costTypes: ['electricity'] },
-  { name: 'EnBW Energie Baden-Württemberg AG', shortName: 'EnBW', taxId: 'DE812340891', category: 'energy_electricity', costTypes: ['electricity'] },
-  { name: 'RWE AG', shortName: 'RWE', taxId: 'DE811156927', category: 'energy_electricity', costTypes: ['electricity'] },
-  { name: 'Uniper SE', shortName: 'Uniper', taxId: 'DE815623411', category: 'energy_gas', costTypes: ['gas', 'heating'] },
-  { name: 'Gasag AG', shortName: 'GASAG', taxId: 'DE136629780', category: 'energy_gas', costTypes: ['gas'] },
-  { name: 'Mainova AG', shortName: 'Mainova', taxId: 'DE113641295', category: 'energy_gas', costTypes: ['gas', 'heating', 'district_heating'] },
-  { name: 'Telekom Deutschland GmbH', shortName: 'Telekom', taxId: 'DE122265872', category: 'telecom', costTypes: ['internet', 'phone', 'mobile'] },
-  { name: 'Vodafone GmbH', shortName: 'Vodafone', taxId: 'DE147aborec', category: 'telecom', costTypes: ['internet', 'phone', 'mobile'] },
-  { name: 'Berliner Wasserbetriebe AöR', shortName: 'BWB', taxId: 'DE136630247', category: 'utilities', costTypes: ['water', 'sewage'] },
-  { name: 'Hamburger Wasserwerke GmbH', shortName: 'HWW', taxId: 'DE118572439', category: 'utilities', costTypes: ['water', 'sewage'] },
-  { name: 'Stadtwerke München GmbH', shortName: 'SWM', taxId: 'DE129304107', category: 'utilities', costTypes: ['water', 'sewage', 'district_heating'] },
-  { name: 'REMONDIS SE & Co. KG', shortName: 'REMONDIS', taxId: 'DE126aborec', category: 'waste', costTypes: ['waste_disposal', 'recycling'] },
-  { name: 'Alba Group plc & Co. KG', shortName: 'ALBA', taxId: 'DE136629992', category: 'waste', costTypes: ['waste_disposal', 'recycling'] },
-  { name: 'Kärcher SE & Co. KG', shortName: 'Kärcher', taxId: 'DE147926517', category: 'facility', costTypes: ['cleaning'] },
-  { name: 'Wisag Facility Service Holding GmbH', shortName: 'WISAG', taxId: 'DE113693255', category: 'facility', costTypes: ['cleaning', 'security', 'maintenance'] },
-  { name: 'Apleona GmbH', shortName: 'Apleona', taxId: 'DE248561397', category: 'facility', costTypes: ['maintenance', 'facility_management'] },
-  { name: 'Securitas Deutschland Holding GmbH', shortName: 'Securitas', taxId: 'DE811329164', category: 'security', costTypes: ['security'] },
+  {
+    name: 'E.ON Energie Deutschland GmbH',
+    shortName: 'E.ON',
+    taxId: 'DE811190411',
+    category: 'energy_electricity',
+    costTypes: ['electricity'],
+  },
+  {
+    name: 'Vattenfall Europe Sales GmbH',
+    shortName: 'Vattenfall',
+    taxId: 'DE246575638',
+    category: 'energy_electricity',
+    costTypes: ['electricity'],
+  },
+  {
+    name: 'EnBW Energie Baden-Württemberg AG',
+    shortName: 'EnBW',
+    taxId: 'DE812340891',
+    category: 'energy_electricity',
+    costTypes: ['electricity'],
+  },
+  {
+    name: 'RWE AG',
+    shortName: 'RWE',
+    taxId: 'DE811156927',
+    category: 'energy_electricity',
+    costTypes: ['electricity'],
+  },
+  {
+    name: 'Uniper SE',
+    shortName: 'Uniper',
+    taxId: 'DE815623411',
+    category: 'energy_gas',
+    costTypes: ['gas', 'heating'],
+  },
+  {
+    name: 'Gasag AG',
+    shortName: 'GASAG',
+    taxId: 'DE136629780',
+    category: 'energy_gas',
+    costTypes: ['gas'],
+  },
+  {
+    name: 'Mainova AG',
+    shortName: 'Mainova',
+    taxId: 'DE113641295',
+    category: 'energy_gas',
+    costTypes: ['gas', 'heating', 'district_heating'],
+  },
+  {
+    name: 'Telekom Deutschland GmbH',
+    shortName: 'Telekom',
+    taxId: 'DE122265872',
+    category: 'telecom',
+    costTypes: ['internet', 'phone', 'mobile'],
+  },
+  {
+    name: 'Vodafone GmbH',
+    shortName: 'Vodafone',
+    taxId: 'DE147aborec',
+    category: 'telecom',
+    costTypes: ['internet', 'phone', 'mobile'],
+  },
+  {
+    name: 'Berliner Wasserbetriebe AöR',
+    shortName: 'BWB',
+    taxId: 'DE136630247',
+    category: 'utilities',
+    costTypes: ['water', 'sewage'],
+  },
+  {
+    name: 'Hamburger Wasserwerke GmbH',
+    shortName: 'HWW',
+    taxId: 'DE118572439',
+    category: 'utilities',
+    costTypes: ['water', 'sewage'],
+  },
+  {
+    name: 'Stadtwerke München GmbH',
+    shortName: 'SWM',
+    taxId: 'DE129304107',
+    category: 'utilities',
+    costTypes: ['water', 'sewage', 'district_heating'],
+  },
+  {
+    name: 'REMONDIS SE & Co. KG',
+    shortName: 'REMONDIS',
+    taxId: 'DE126aborec',
+    category: 'waste',
+    costTypes: ['waste_disposal', 'recycling'],
+  },
+  {
+    name: 'Alba Group plc & Co. KG',
+    shortName: 'ALBA',
+    taxId: 'DE136629992',
+    category: 'waste',
+    costTypes: ['waste_disposal', 'recycling'],
+  },
+  {
+    name: 'Kärcher SE & Co. KG',
+    shortName: 'Kärcher',
+    taxId: 'DE147926517',
+    category: 'facility',
+    costTypes: ['cleaning'],
+  },
+  {
+    name: 'Wisag Facility Service Holding GmbH',
+    shortName: 'WISAG',
+    taxId: 'DE113693255',
+    category: 'facility',
+    costTypes: ['cleaning', 'security', 'maintenance'],
+  },
+  {
+    name: 'Apleona GmbH',
+    shortName: 'Apleona',
+    taxId: 'DE248561397',
+    category: 'facility',
+    costTypes: ['maintenance', 'facility_management'],
+  },
+  {
+    name: 'Securitas Deutschland Holding GmbH',
+    shortName: 'Securitas',
+    taxId: 'DE811329164',
+    category: 'security',
+    costTypes: ['security'],
+  },
 ];
 
 // Cost centers
@@ -101,25 +317,25 @@ const COST_CONFIGS = {
   electricity: {
     basePerSqm: { office: 18, production: 45, warehouse: 12, data_center: 280 },
     pricePerKwh: 0.32,
-    seasonality: (month: number) => 1 + 0.15 * Math.cos((month - 7) * Math.PI / 6), // Higher in winter
+    seasonality: (month: number) => 1 + 0.15 * Math.cos(((month - 7) * Math.PI) / 6), // Higher in winter
     yearlyInflation: 0.08,
   },
   gas: {
     basePerSqm: { office: 8, production: 22, warehouse: 5, data_center: 2 },
     pricePerKwh: 0.11,
-    seasonality: (month: number) => 1 + 0.6 * Math.cos((month - 1) * Math.PI / 6), // Much higher in winter
+    seasonality: (month: number) => 1 + 0.6 * Math.cos(((month - 1) * Math.PI) / 6), // Much higher in winter
     yearlyInflation: 0.12,
   },
   district_heating: {
     basePerSqm: { office: 6, production: 15, warehouse: 3, data_center: 1 },
     pricePerKwh: 0.09,
-    seasonality: (month: number) => 1 + 0.5 * Math.cos((month - 1) * Math.PI / 6),
+    seasonality: (month: number) => 1 + 0.5 * Math.cos(((month - 1) * Math.PI) / 6),
     yearlyInflation: 0.06,
   },
   water: {
     basePerSqm: { office: 0.8, production: 2.5, warehouse: 0.3, data_center: 1.2 },
-    pricePerM3: 5.20,
-    seasonality: (month: number) => 1 + 0.1 * Math.sin((month - 4) * Math.PI / 6), // Slightly higher in summer
+    pricePerM3: 5.2,
+    seasonality: (month: number) => 1 + 0.1 * Math.sin(((month - 4) * Math.PI) / 6), // Slightly higher in summer
     yearlyInflation: 0.03,
   },
   internet: {
@@ -150,17 +366,17 @@ const COST_CONFIGS = {
   },
   maintenance: {
     basePerSqm: { office: 2.2, production: 5.5, warehouse: 1.8, data_center: 8.5 },
-    seasonality: (month: number) => month === 3 || month === 9 ? 1.8 : 1, // Quarterly maintenance peaks
+    seasonality: (month: number) => (month === 3 || month === 9 ? 1.8 : 1), // Quarterly maintenance peaks
     yearlyInflation: 0.03,
   },
 };
 
 async function main() {
-  console.log('🏭 Enterprise Seed: TechFlow Industries GmbH\n');
+  console.log('Enterprise Seed: TechFlow Industries GmbH\n');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   // Clear existing data
-  console.log('🗑️  Clearing existing data...');
+  console.log('Clearing existing data...');
   await prisma.alert.deleteMany();
   await prisma.anomaly.deleteMany();
   await prisma.costRecord.deleteMany();
@@ -174,10 +390,10 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.appSettings.deleteMany();
   await prisma.auditLog.deleteMany();
-  console.log('✅ Database cleared\n');
+  console.log('Database cleared\n');
 
   // Create organization
-  console.log('🏢 Creating organization...');
+  console.log('Creating organization...');
   const org = await prisma.organization.create({
     data: {
       name: COMPANY.name,
@@ -188,10 +404,10 @@ async function main() {
       employeeCount: COMPANY.employeeCount,
     },
   });
-  console.log(`✅ ${COMPANY.name}\n`);
+  console.log(`${COMPANY.name}\n`);
 
   // Create users
-  console.log('👥 Creating users...');
+  console.log('Creating users...');
   const passwordHash = await hashPassword('Demo2024!');
   const users = [];
   for (const userData of USERS_DATA) {
@@ -209,10 +425,10 @@ async function main() {
     });
     users.push(user);
   }
-  console.log(`✅ ${users.length} users created\n`);
+  console.log(`${users.length} users created\n`);
 
   // Create locations
-  console.log('📍 Creating locations...');
+  console.log('Creating locations...');
   const locations = [];
   for (const loc of LOCATIONS_DATA) {
     const location = await prisma.location.create({
@@ -234,12 +450,12 @@ async function main() {
       },
     });
     locations.push(location);
-    console.log(`   📍 ${loc.name} (${loc.grossFloorArea.toLocaleString()} m²)`);
+    console.log(`   - ${loc.name} (${loc.grossFloorArea.toLocaleString()} m²)`);
   }
-  console.log(`✅ ${locations.length} locations created\n`);
+  console.log(`${locations.length} locations created\n`);
 
   // Create cost centers
-  console.log('💰 Creating cost centers...');
+  console.log('Creating cost centers...');
   const costCenterMap = new Map<string, string>();
   for (const cc of COST_CENTERS_DATA) {
     const costCenter = await prisma.costCenter.create({
@@ -254,10 +470,10 @@ async function main() {
     });
     costCenterMap.set(cc.code, costCenter.id);
   }
-  console.log(`✅ ${COST_CENTERS_DATA.length} cost centers created\n`);
+  console.log(`${COST_CENTERS_DATA.length} cost centers created\n`);
 
   // Create suppliers
-  console.log('🏪 Creating suppliers...');
+  console.log('Creating suppliers...');
   const suppliers = [];
   for (const sup of SUPPLIERS_DATA) {
     const supplier = await prisma.supplier.create({
@@ -272,12 +488,18 @@ async function main() {
     });
     suppliers.push({ ...supplier, costTypes: sup.costTypes });
   }
-  console.log(`✅ ${suppliers.length} suppliers created\n`);
+  console.log(`${suppliers.length} suppliers created\n`);
 
   // Generate 3 years of cost records
-  console.log('📊 Generating cost records (3 years of history)...');
+  console.log('Generating cost records (3 years of history)...');
   const costRecords: Prisma.CostRecordCreateManyInput[] = [];
-  const anomalies: { costRecordIndex: number; type: string; severity: string; message: string; details: object }[] = [];
+  const anomalies: {
+    costRecordIndex: number;
+    type: string;
+    severity: string;
+    message: string;
+    details: object;
+  }[] = [];
 
   const now = new Date();
   const startYear = now.getFullYear() - 2;
@@ -297,9 +519,9 @@ async function main() {
   }
 
   // Assign primary suppliers to locations
-  const locationSuppliers = new Map<string, Map<string, typeof suppliers[0]>>();
+  const locationSuppliers = new Map<string, Map<string, (typeof suppliers)[0]>>();
   for (const location of locations) {
-    const locSuppliers = new Map<string, typeof suppliers[0]>();
+    const locSuppliers = new Map<string, (typeof suppliers)[0]>();
     for (const [costType, sups] of suppliersByCostType.entries()) {
       locSuppliers.set(costType, randomChoice(sups));
     }
@@ -324,7 +546,7 @@ async function main() {
         if (COST_CONFIGS.electricity.basePerSqm[locType]) {
           const config = COST_CONFIGS.electricity;
           const supplier = locSuppliers.get('electricity')!;
-          const baseAmount = sqm * config.basePerSqm[locType] / 12;
+          const baseAmount = (sqm * config.basePerSqm[locType]) / 12;
           const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
           const seasonal = config.seasonality(month);
           const variance = randomBetween(0.92, 1.08);
@@ -365,7 +587,11 @@ async function main() {
               type: 'consumption_spike',
               severity: spike > 2 ? 'critical' : 'warning',
               message: `Stromverbrauch ${((spike - 1) * 100).toFixed(0)}% über Erwartung`,
-              details: { expectedAmount: amount / spike, actualAmount: amount, spikePercent: (spike - 1) * 100 },
+              details: {
+                expectedAmount: amount / spike,
+                actualAmount: amount,
+                spikePercent: (spike - 1) * 100,
+              },
             });
           }
         }
@@ -375,10 +601,10 @@ async function main() {
           const config = COST_CONFIGS.gas;
           const supplier = locSuppliers.get('gas') || locSuppliers.get('heating');
           if (supplier) {
-            const baseAmount = sqm * config.basePerSqm[locType] / 12;
+            const baseAmount = (sqm * config.basePerSqm[locType]) / 12;
             const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
             const seasonal = config.seasonality(month);
-            const variance = randomBetween(0.90, 1.10);
+            const variance = randomBetween(0.9, 1.1);
             const amount = baseAmount * inflation * seasonal * variance;
             const quantity = amount / (config.pricePerKwh * inflation);
 
@@ -408,9 +634,10 @@ async function main() {
         // WATER
         if (COST_CONFIGS.water.basePerSqm[locType]) {
           const config = COST_CONFIGS.water;
-          const supplier = locSuppliers.get('water') || suppliers.find(s => s.costTypes.includes('water'));
+          const supplier =
+            locSuppliers.get('water') || suppliers.find((s) => s.costTypes.includes('water'));
           if (supplier) {
-            const baseAmount = sqm * config.basePerSqm[locType] / 12;
+            const baseAmount = (sqm * config.basePerSqm[locType]) / 12;
             const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
             const seasonal = config.seasonality(month);
             const variance = randomBetween(0.92, 1.08);
@@ -433,7 +660,7 @@ async function main() {
               pricePerUnit: new Prisma.Decimal((config.pricePerM3 * inflation).toFixed(4)),
               costType: 'water',
               costCategory: 'utilities',
-              confidence: randomBetween(0.90, 0.98),
+              confidence: randomBetween(0.9, 0.98),
               dataQuality: 'extracted',
               isVerified: year < endYear || month < now.getMonth() - 1,
             });
@@ -443,7 +670,8 @@ async function main() {
         // INTERNET
         if (COST_CONFIGS.internet.baseMonthly[locType]) {
           const config = COST_CONFIGS.internet;
-          const supplier = locSuppliers.get('internet') || suppliers.find(s => s.costTypes.includes('internet'));
+          const supplier =
+            locSuppliers.get('internet') || suppliers.find((s) => s.costTypes.includes('internet'));
           if (supplier) {
             const baseAmount = config.baseMonthly[locType];
             const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
@@ -472,9 +700,9 @@ async function main() {
         // CLEANING (monthly)
         if (COST_CONFIGS.cleaning.basePerSqm[locType]) {
           const config = COST_CONFIGS.cleaning;
-          const supplier = suppliers.find(s => s.costTypes.includes('cleaning'));
+          const supplier = suppliers.find((s) => s.costTypes.includes('cleaning'));
           if (supplier) {
-            const baseAmount = sqm * config.basePerSqm[locType] / 12;
+            const baseAmount = (sqm * config.basePerSqm[locType]) / 12;
             const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
             const variance = randomBetween(0.95, 1.05);
             const amount = baseAmount * inflation * variance;
@@ -502,7 +730,7 @@ async function main() {
         // SECURITY (for larger locations)
         if (sqm > 5000 && COST_CONFIGS.security.baseMonthly[locType]) {
           const config = COST_CONFIGS.security;
-          const supplier = suppliers.find(s => s.costTypes.includes('security'));
+          const supplier = suppliers.find((s) => s.costTypes.includes('security'));
           if (supplier) {
             const baseAmount = config.baseMonthly[locType];
             const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
@@ -529,11 +757,14 @@ async function main() {
         }
 
         // WASTE DISPOSAL (monthly for production/warehouse)
-        if ((locType === 'production' || locType === 'warehouse') && COST_CONFIGS.waste_disposal.basePerSqm[locType]) {
+        if (
+          (locType === 'production' || locType === 'warehouse') &&
+          COST_CONFIGS.waste_disposal.basePerSqm[locType]
+        ) {
           const config = COST_CONFIGS.waste_disposal;
-          const supplier = suppliers.find(s => s.costTypes.includes('waste_disposal'));
+          const supplier = suppliers.find((s) => s.costTypes.includes('waste_disposal'));
           if (supplier) {
-            const baseAmount = sqm * config.basePerSqm[locType] / 12;
+            const baseAmount = (sqm * config.basePerSqm[locType]) / 12;
             const inflation = Math.pow(1 + config.yearlyInflation, yearsFromStart);
             const variance = randomBetween(0.85, 1.15);
             const amount = baseAmount * inflation * variance;
@@ -571,12 +802,14 @@ async function main() {
   for (let i = 0; i < costRecords.length; i += batchSize) {
     const batch = costRecords.slice(i, i + batchSize);
     await prisma.costRecord.createMany({ data: batch, skipDuplicates: true });
-    process.stdout.write(`   Progress: ${Math.min(i + batchSize, costRecords.length)}/${costRecords.length}\r`);
+    process.stdout.write(
+      `   Progress: ${Math.min(i + batchSize, costRecords.length)}/${costRecords.length}\r`,
+    );
   }
-  console.log(`\n✅ ${costRecords.length} cost records created\n`);
+  console.log(`\n${costRecords.length} cost records created\n`);
 
   // Create anomalies
-  console.log('⚠️  Creating anomalies...');
+  console.log('Creating anomalies...');
   const allCostRecords = await prisma.costRecord.findMany({
     orderBy: { createdAt: 'asc' },
     select: { id: true },
@@ -669,21 +902,24 @@ async function main() {
   }
 
   await prisma.anomaly.createMany({ data: anomalyData, skipDuplicates: true });
-  console.log(`✅ ${anomalyData.length} anomalies created\n`);
+  console.log(`${anomalyData.length} anomalies created\n`);
 
   // Build monthly aggregates
-  console.log('📈 Building monthly aggregates...');
-  const aggregates = new Map<string, {
-    year: number;
-    month: number;
-    locationId: string | null;
-    supplierId: string | null;
-    costType: string | null;
-    amountSum: number;
-    amountNetSum: number;
-    quantitySum: number;
-    recordCount: number;
-  }>();
+  console.log('Building monthly aggregates...');
+  const aggregates = new Map<
+    string,
+    {
+      year: number;
+      month: number;
+      locationId: string | null;
+      supplierId: string | null;
+      costType: string | null;
+      amountSum: number;
+      amountNetSum: number;
+      quantitySum: number;
+      recordCount: number;
+    }
+  >();
 
   for (const record of costRecords) {
     const year = record.periodStart.getFullYear();
@@ -711,7 +947,7 @@ async function main() {
     }
   }
 
-  const aggData = Array.from(aggregates.values()).map(agg => ({
+  const aggData = Array.from(aggregates.values()).map((agg) => ({
     year: agg.year,
     month: agg.month,
     locationId: agg.locationId,
@@ -724,10 +960,10 @@ async function main() {
   }));
 
   await prisma.costRecordMonthlyAgg.createMany({ data: aggData });
-  console.log(`✅ ${aggData.length} monthly aggregates created\n`);
+  console.log(`${aggData.length} monthly aggregates created\n`);
 
   // Create some sample documents (metadata only)
-  console.log('📄 Creating sample documents...');
+  console.log('Creating sample documents...');
   const documents: Prisma.DocumentCreateManyInput[] = [];
   const docStatuses = ['completed', 'completed', 'completed', 'pending', 'processing', 'failed'];
 
@@ -748,14 +984,19 @@ async function main() {
       costTypes: supplier.costTypes,
       extractionStatus: status,
       extractedAt: status === 'completed' ? new Date(uploadDate.getTime() + 60000) : null,
-      verificationStatus: status === 'completed' ? (Math.random() < 0.7 ? 'auto_verified' : 'manually_verified') : 'pending',
+      verificationStatus:
+        status === 'completed'
+          ? Math.random() < 0.7
+            ? 'auto_verified'
+            : 'manually_verified'
+          : 'pending',
       uploadedAt: uploadDate,
       uploadedBy: randomChoice(users).id,
     });
   }
 
   await prisma.document.createMany({ data: documents });
-  console.log(`✅ ${documents.length} documents created\n`);
+  console.log(`${documents.length} documents created\n`);
 
   // Create app settings
   await prisma.appSettings.create({
@@ -790,7 +1031,7 @@ async function main() {
       },
     },
   });
-  console.log('✅ App settings configured\n');
+  console.log('App settings configured\n');
 
   // Summary
   const totalAmount = await prisma.costRecordMonthlyAgg.aggregate({
@@ -804,19 +1045,21 @@ async function main() {
   ]);
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🎉 ENTERPRISE SEED COMPLETE\n');
-  console.log(`📊 Summary:`);
+  console.log('ENTERPRISE SEED COMPLETE\n');
+  console.log('Summary:');
   console.log(`   • Organization: ${COMPANY.name}`);
   console.log(`   • Locations: ${locations.length}`);
   console.log(`   • Suppliers: ${suppliers.length}`);
   console.log(`   • Cost Records: ${stats[0].toLocaleString()}`);
-  console.log(`   • Total Costs: €${Number(totalAmount._sum.amountSum || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}`);
+  console.log(
+    `   • Total Costs: €${Number(totalAmount._sum.amountSum || 0).toLocaleString('de-DE', { minimumFractionDigits: 2 })}`,
+  );
   console.log(`   • Open Anomalies: ${stats[1]}`);
   console.log(`   • Documents: ${stats[2]}`);
   console.log(`   • Users: ${users.length}`);
   console.log('');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🔐 LOGIN CREDENTIALS:\n');
+  console.log('LOGIN CREDENTIALS:\n');
   console.log('   Admin:    admin@techflow.de / Demo2024!');
   console.log('   Manager:  m.schmidt@techflow.de / Demo2024!');
   console.log('   Analyst:  j.fischer@techflow.de / Demo2024!');
@@ -826,7 +1069,7 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error('❌ Seed failed:', e);
+    console.error('Seed failed:', e);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());

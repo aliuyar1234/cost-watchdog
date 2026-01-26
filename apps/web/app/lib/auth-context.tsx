@@ -2,7 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi, type User, type AuthResponse, type LoginRequest, type RegisterRequest } from './api';
+import {
+  authApi,
+  type User,
+  type AuthResponse,
+  type LoginRequest,
+  type RegisterRequest,
+} from './api';
 
 interface AuthContextType {
   user: User | null;
@@ -45,17 +51,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   }, []);
 
-  const login = useCallback(async (data: LoginRequest) => {
-    const response = await authApi.login(data);
-    handleAuthResponse(response);
-    router.push('/dashboard');
-  }, [handleAuthResponse, router]);
+  const login = useCallback(
+    async (data: LoginRequest) => {
+      const response = await authApi.login(data);
+      handleAuthResponse(response);
+      router.push('/dashboard');
+    },
+    [handleAuthResponse, router],
+  );
 
-  const register = useCallback(async (data: RegisterRequest) => {
-    const response = await authApi.register(data);
-    handleAuthResponse(response);
-    router.push('/dashboard');
-  }, [handleAuthResponse, router]);
+  const register = useCallback(
+    async (data: RegisterRequest) => {
+      const response = await authApi.register(data);
+      handleAuthResponse(response);
+      router.push('/dashboard');
+    },
+    [handleAuthResponse, router],
+  );
 
   const logout = useCallback(async () => {
     try {

@@ -1,5 +1,10 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { secrets } from './secrets.js';
+import {
+  encryptionMiddleware,
+  initializeEncryptionMiddleware,
+} from './prisma-encryption-middleware.js';
+import { dbQueryDuration } from './metrics.js';
 
 /**
  * Hydrate DATABASE_URL from Docker secrets before Prisma initialization.
@@ -9,6 +14,17 @@ import { secrets } from './secrets.js';
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 const LOG_QUERIES = process.env['PRISMA_LOG_QUERIES'] === 'true';
 
+try {
+  initializeEncryptionMiddleware();
+} catch (err) {
+  if (IS_PRODUCTION) {
+    throw err;
+  }
+  console.warn(
+    '[Encryption] Field encryption is not configured. Some features (MFA, at-rest field encryption) may not work. Set FIELD_ENCRYPTION_KEY for production.',
+  );
+}
+
 if (!process.env['DATABASE_URL']) {
   const dbUrl = secrets.getDatabaseUrl();
   if (dbUrl) {
@@ -16,7 +32,7 @@ if (!process.env['DATABASE_URL']) {
   } else if (IS_PRODUCTION) {
     throw new Error(
       'FATAL: DATABASE_URL not found. ' +
-      'Provide via Docker secret at /run/secrets/db_url or DATABASE_URL env var.'
+        'Provide via Docker secret at /run/secrets/db_url or DATABASE_URL env var.',
     );
   }
 }
@@ -27,6 +43,7 @@ if (!process.env['DATABASE_URL']) {
  */
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  prismaMiddlewareApplied?: boolean;
 };
 
 export const prisma =
@@ -38,6 +55,21 @@ export const prisma =
         ? (['query', 'error', 'warn'] as Prisma.LogLevel[])
         : (['error', 'warn'] as Prisma.LogLevel[]),
   });
+
+if (!globalForPrisma.prismaMiddlewareApplied) {
+  prisma.$use(encryptionMiddleware);
+  prisma.$use(async (params, next) => {
+    const startedAt = process.hrtime.bigint();
+    try {
+      return await next(params);
+    } finally {
+      const durationSeconds = Number(process.hrtime.bigint() - startedAt) / 1e9;
+      const operation = params.model ? `${params.model}.${params.action}` : params.action;
+      dbQueryDuration.labels(operation).observe(durationSeconds);
+    }
+  });
+  globalForPrisma.prismaMiddlewareApplied = true;
+}
 
 if (process.env['NODE_ENV'] !== 'production') {
   globalForPrisma.prisma = prisma;
@@ -68,7 +100,7 @@ export type PrismaTransaction = Omit<
  * @returns The result of the callback
  */
 export async function withTransaction<T>(
-  callback: (tx: PrismaTransaction) => Promise<T>
+  callback: (tx: PrismaTransaction) => Promise<T>,
 ): Promise<T> {
   return prisma.$transaction(async (tx) => {
     return callback(tx);
@@ -90,7 +122,7 @@ export async function withTransactionExtended<T>(
     maxWait?: number;
     timeout?: number;
     isolationLevel?: Prisma.TransactionIsolationLevel;
-  }
+  },
 ): Promise<T> {
   return prisma.$transaction(
     async (tx) => {
@@ -100,7 +132,7 @@ export async function withTransactionExtended<T>(
       maxWait: options?.maxWait ?? 5000,
       timeout: options?.timeout ?? 10000,
       isolationLevel: options?.isolationLevel,
-    }
+    },
   );
 }
 

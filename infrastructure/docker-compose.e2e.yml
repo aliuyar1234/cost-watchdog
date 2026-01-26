@@ -1,0 +1,94 @@
+# =============================================================================
+# Cost Watchdog - E2E Test Infrastructure
+# =============================================================================
+# This compose file is for LOCAL E2E TESTS only.
+# It uses separate ports to avoid clashing with dev compose.
+# =============================================================================
+
+name: cost-watchdog-e2e
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cost-watchdog-postgres-e2e
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cost_watchdog_e2e_test
+      POSTGRES_PASSWORD: cost_watchdog_e2e_test
+      POSTGRES_DB: cost_watchdog_e2e_test
+    ports:
+      - '127.0.0.1:5434:5432'
+    volumes:
+      - postgres_e2e_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cost_watchdog_e2e_test -d cost_watchdog_e2e_test']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: cost-watchdog-redis-e2e
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy noeviction --appendonly no
+    ports:
+      - '127.0.0.1:6381:6379'
+    volumes:
+      - redis_e2e_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2024-02-17T01-15-57Z
+    container_name: cost-watchdog-minio-e2e
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minio_admin_dev}
+    ports:
+      - '127.0.0.1:9002:9000'
+      - '127.0.0.1:9003:9001'
+    volumes:
+      - minio_e2e_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      # `minio/minio` does not ship with curl/wget; prefer `mc ready` but fall back to HTTP health endpoint if available.
+      test:
+        [
+          'CMD-SHELL',
+          'if command -v curl >/dev/null 2>&1; then curl -fsS http://localhost:9000/minio/health/ready; elif command -v wget >/dev/null 2>&1; then wget -q --spider http://localhost:9000/minio/health/ready; elif command -v mc >/dev/null 2>&1; then mc alias set local http://localhost:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 && mc ready local >/dev/null 2>&1; else exit 1; fi',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio-init:
+    # The `minio/minio` release tags do not map 1:1 to `minio/mc` tags.
+    # Pin by digest for reproducible builds.
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    container_name: cost-watchdog-minio-init-e2e
+    depends_on:
+      - minio
+    restart: 'no'
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minio_admin_dev}
+      S3_BUCKET: ${S3_BUCKET:-cost-watchdog-e2e}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD}; do
+        echo 'Waiting for MinIO...';
+        sleep 1;
+      done &&
+      mc mb --ignore-existing local/$${S3_BUCKET} &&
+      mc anonymous set none local/$${S3_BUCKET} &&
+      echo 'MinIO bucket ensured: '$${S3_BUCKET}
+      "
+
+volumes:
+  postgres_e2e_data:
+  redis_e2e_data:
+  minio_e2e_data:

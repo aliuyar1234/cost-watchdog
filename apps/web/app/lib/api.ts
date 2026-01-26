@@ -1,19 +1,7 @@
 /**
- * API module - Re-exports from organized submodules
+ * API module - re-exports from `app/lib/api/*`.
  *
- * This file maintains backwards compatibility with existing imports.
- * New code should import from './api/index.js' or specific submodules.
- *
- * Structure:
- *   api/
- *   ├── client.ts     - Core fetch utilities, ApiError, buildQueryString
- *   ├── auth.ts       - Authentication endpoints
- *   ├── documents.ts  - Document upload & management
- *   ├── anomalies.ts  - Anomaly detection & status
- *   ├── analytics.ts  - Dashboard & reporting data
- *   ├── exports.ts    - CSV/JSON exports
- *   ├── users.ts      - User management
- *   └── index.ts      - Re-exports all
+ * Prefer importing from `./api/index` (or a specific submodule) in new code.
  */
 
 export * from './api/index';

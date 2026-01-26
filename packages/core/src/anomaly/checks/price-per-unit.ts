@@ -34,11 +34,12 @@ export const pricePerUnitCheck: AnomalyCheck = {
 
     // Get recent records with price per unit data (last 6 months)
     const recentRecords = context.historicalRecords
-      .filter(r =>
-        r.costType === record.costType &&
-        r.pricePerUnit != null &&
-        r.pricePerUnit > 0 &&
-        r.periodStart.getTime() < record.periodStart.getTime()
+      .filter(
+        (r) =>
+          r.costType === record.costType &&
+          r.pricePerUnit != null &&
+          r.pricePerUnit > 0 &&
+          r.periodStart.getTime() < record.periodStart.getTime(),
       )
       .sort((a, b) => b.periodStart.getTime() - a.periodStart.getTime())
       .slice(0, 6);
@@ -49,7 +50,8 @@ export const pricePerUnitCheck: AnomalyCheck = {
     }
 
     // Calculate average price
-    const avgPrice = recentRecords.reduce((sum, r) => sum + r.pricePerUnit!, 0) / recentRecords.length;
+    const avgPrice =
+      recentRecords.reduce((sum, r) => sum + r.pricePerUnit!, 0) / recentRecords.length;
 
     // Avoid division by zero
     if (avgPrice === 0) {

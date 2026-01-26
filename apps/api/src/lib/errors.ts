@@ -15,7 +15,7 @@ interface ErrorResponse {
 export function sendBadRequest(
   reply: FastifyReply,
   message: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ): FastifyReply {
   const response: ErrorResponse = { error: 'Bad Request', message };
   if (details) {
@@ -27,40 +27,28 @@ export function sendBadRequest(
 /**
  * Send a 401 Unauthorized response
  */
-export function sendUnauthorized(
-  reply: FastifyReply,
-  message = 'Unauthorized'
-): FastifyReply {
+export function sendUnauthorized(reply: FastifyReply, message = 'Unauthorized'): FastifyReply {
   return reply.status(401).send({ error: message });
 }
 
 /**
  * Send a 403 Forbidden response
  */
-export function sendForbidden(
-  reply: FastifyReply,
-  message = 'Forbidden'
-): FastifyReply {
+export function sendForbidden(reply: FastifyReply, message = 'Forbidden'): FastifyReply {
   return reply.status(403).send({ error: message });
 }
 
 /**
  * Send a 404 Not Found response
  */
-export function sendNotFound(
-  reply: FastifyReply,
-  resource = 'Resource'
-): FastifyReply {
+export function sendNotFound(reply: FastifyReply, resource = 'Resource'): FastifyReply {
   return reply.status(404).send({ error: `${resource} not found` });
 }
 
 /**
  * Send a 409 Conflict response
  */
-export function sendConflict(
-  reply: FastifyReply,
-  message: string
-): FastifyReply {
+export function sendConflict(reply: FastifyReply, message: string): FastifyReply {
   return reply.status(409).send({ error: 'Conflict', message });
 }
 
@@ -69,7 +57,7 @@ export function sendConflict(
  */
 export function sendValidationError(
   reply: FastifyReply,
-  errors: Record<string, string> | string[]
+  errors: Record<string, string> | string[],
 ): FastifyReply {
   return reply.status(422).send({
     error: 'Validation Error',
@@ -82,7 +70,7 @@ export function sendValidationError(
  */
 export function sendInternalError(
   reply: FastifyReply,
-  message = 'Internal Server Error'
+  message = 'Internal Server Error',
 ): FastifyReply {
   return reply.status(500).send({ error: message });
 }

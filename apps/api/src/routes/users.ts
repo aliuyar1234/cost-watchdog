@@ -119,7 +119,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
           hasMore: offset + data.length < total,
         },
       });
-    }
+    },
   );
 
   /**
@@ -163,7 +163,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return reply.send(formatUser(targetUser));
-    }
+    },
   );
 
   /**
@@ -236,7 +236,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.status(201).send(formatUser(newUser));
-    }
+    },
   );
 
   /**
@@ -263,7 +263,13 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         return sendForbidden(reply, 'Admin access required');
       }
 
-      if ((body.role || body.isActive !== undefined || body.allowedLocationIds || body.allowedCostCenterIds) && !isAdmin) {
+      if (
+        (body.role ||
+          body.isActive !== undefined ||
+          body.allowedLocationIds ||
+          body.allowedCostCenterIds) &&
+        !isAdmin
+      ) {
         return sendForbidden(reply, 'Only admins can modify roles and permissions');
       }
 
@@ -277,8 +283,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.lastName) updateData['lastName'] = body.lastName;
       if (body.role && isAdmin) updateData['role'] = body.role;
       if (body.isActive !== undefined && isAdmin) updateData['isActive'] = body.isActive;
-      if (body.allowedLocationIds && isAdmin) updateData['allowedLocationIds'] = body.allowedLocationIds;
-      if (body.allowedCostCenterIds && isAdmin) updateData['allowedCostCenterIds'] = body.allowedCostCenterIds;
+      if (body.allowedLocationIds && isAdmin)
+        updateData['allowedLocationIds'] = body.allowedLocationIds;
+      if (body.allowedCostCenterIds && isAdmin)
+        updateData['allowedCostCenterIds'] = body.allowedCostCenterIds;
 
       const updatedUser = await prisma.user.update({
         where: { id },
@@ -301,7 +309,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       const ctx = getAuditContext(request);
       const changes = calculateChanges(
         sanitizeForAudit({ ...existing }),
-        sanitizeForAudit({ ...updatedUser })
+        sanitizeForAudit({ ...updatedUser }),
       );
 
       // Special handling for role changes
@@ -312,10 +320,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       // This prevents privilege escalation attacks using existing sessions
       if (roleChanged) {
         await terminateAllSessions(id).catch((err) =>
-          request.log.error(err, 'Failed to terminate sessions after role change')
+          request.log.error(err, 'Failed to terminate sessions after role change'),
         );
         await invalidateAllFamiliesForUser(id, 'role_change').catch((err) =>
-          request.log.error(err, 'Failed to invalidate token families after role change')
+          request.log.error(err, 'Failed to invalidate token families after role change'),
         );
       }
 
@@ -332,7 +340,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.send(formatUser(updatedUser));
-    }
+    },
   );
 
   /**
@@ -382,7 +390,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.status(204).send();
-    }
+    },
   );
 
   /**
@@ -425,10 +433,10 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       // Session fixation prevention: Invalidate all sessions on password change
       // This forces the user to re-authenticate with their new password
       await terminateAllSessions(id).catch((err) =>
-        request.log.error(err, 'Failed to terminate sessions after password reset')
+        request.log.error(err, 'Failed to terminate sessions after password reset'),
       );
       await invalidateAllFamiliesForUser(id, 'password_change').catch((err) =>
-        request.log.error(err, 'Failed to invalidate token families after password reset')
+        request.log.error(err, 'Failed to invalidate token families after password reset'),
       );
 
       // Audit log: password reset by admin
@@ -443,7 +451,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.send({ success: true, message: 'Password reset successfully' });
-    }
+    },
   );
 
   /**
@@ -513,7 +521,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
         wasLocked: true,
         previousLockoutReason: lockoutStatus.reason,
       });
-    }
+    },
   );
 
   /**
@@ -533,7 +541,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const { id } = request.params;
-      const body = request.body as { reason?: string } || {};
+      const body = (request.body as { reason?: string }) || {};
 
       if (!isValidUUID(id)) {
         return sendNotFound(reply, 'User');
@@ -576,7 +584,7 @@ export const userRoutes: FastifyPluginAsync = async (fastify) => {
           flaggedDocuments: result.flaggedDocuments,
         },
       });
-    }
+    },
   );
 };
 

@@ -17,7 +17,7 @@ async function main() {
     where: { email: 'admin@example.com' },
   });
 
-  const admin = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email: 'admin@example.com',
       passwordHash,
@@ -29,7 +29,7 @@ async function main() {
     },
   });
 
-  console.log('✅ Admin user reset successfully!');
+  console.log('Admin user reset successfully!');
   console.log('Email:    admin@example.com');
   console.log('Password: Admin123!');
   console.log('Hash:', passwordHash.substring(0, 50) + '...');

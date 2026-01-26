@@ -76,7 +76,7 @@ export function getExtractionStatusBadge(status: string): ReactElement {
     {
       className: `inline-flex px-2 py-1 text-xs font-medium rounded-full ${config.style}`,
     },
-    config.label
+    config.label,
   );
 }
 
@@ -106,7 +106,7 @@ export function getAnomalyStatusBadge(status: string): ReactElement {
     {
       className: `inline-flex px-2 py-1 text-xs font-medium rounded-full ${config.style}`,
     },
-    config.label
+    config.label,
   );
 }
 
@@ -135,6 +135,6 @@ export function getSeverityBadge(severity: string): ReactElement {
     {
       className: `inline-flex px-2 py-1 text-xs font-medium rounded-full ${config.style}`,
     },
-    config.label
+    config.label,
   );
 }

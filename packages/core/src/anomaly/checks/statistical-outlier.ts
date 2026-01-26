@@ -13,7 +13,7 @@ function calculateMean(values: number[]): number {
  */
 function calculateStdDev(values: number[], mean: number): number {
   if (values.length === 0) return 0;
-  const squaredDiffs = values.map(val => Math.pow(val - mean, 2));
+  const squaredDiffs = values.map((val) => Math.pow(val - mean, 2));
   const avgSquaredDiff = squaredDiffs.reduce((sum, val) => sum + val, 0) / values.length;
   return Math.sqrt(avgSquaredDiff);
 }
@@ -34,11 +34,11 @@ export const statisticalOutlierCheck: AnomalyCheck = {
   async check(record: CostRecordToCheck, context: CheckContext): Promise<CheckResult> {
     // Get amounts from historical records of the same cost type
     const amounts = context.historicalRecords
-      .filter(r =>
-        r.costType === record.costType &&
-        r.periodStart.getTime() < record.periodStart.getTime()
+      .filter(
+        (r) =>
+          r.costType === record.costType && r.periodStart.getTime() < record.periodStart.getTime(),
       )
-      .map(r => r.amount);
+      .map((r) => r.amount);
 
     // Need at least 6 data points for meaningful statistical analysis
     if (amounts.length < 6) {

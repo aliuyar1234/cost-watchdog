@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import authRoutes from '../src/routes/auth.js';
+import sessionRoutes from '../src/routes/sessions.js';
 import authPlugin from '../src/middleware/auth.js';
 import { generateAccessToken, verifyToken } from '../src/lib/auth.js';
 import { prisma } from './setup';
@@ -14,6 +15,7 @@ describe('Auth integration', () => {
     await app.register(cookie);
     await app.register(authPlugin);
     await app.register(authRoutes, { prefix: '/auth' });
+    await app.register(sessionRoutes, { prefix: '/users' });
   });
 
   afterEach(() => {
@@ -155,5 +157,88 @@ describe('Auth integration', () => {
 
     const verified = await verifyToken(token);
     expect(verified).toBeNull();
+  });
+
+  it('rotates refresh tokens and detects reuse (token theft)', async () => {
+    const register = await app.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'rotate@example.com',
+        password: 'Str0ngP@ss!123',
+        firstName: 'Rotate',
+        lastName: 'User',
+      },
+    });
+    expect(register.statusCode).toBe(201);
+
+    const { refreshToken: refreshToken1 } = register.json<{ refreshToken: string }>();
+    expect(refreshToken1).toBeTruthy();
+
+    const refresh1 = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: refreshToken1 },
+    });
+
+    expect(refresh1.statusCode).toBe(200);
+    const { refreshToken: refreshToken2 } = refresh1.json<{ refreshToken: string }>();
+    expect(refreshToken2).toBeTruthy();
+    expect(refreshToken2).not.toBe(refreshToken1);
+
+    const reuseOld = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: refreshToken1 },
+    });
+
+    expect(reuseOld.statusCode).toBe(401);
+    const reuseOldBody = reuseOld.json<{ securityEvent?: boolean }>();
+    expect(reuseOldBody.securityEvent).toBe(true);
+
+    const afterTheft = await app.inject({
+      method: 'POST',
+      url: '/auth/refresh',
+      payload: { refreshToken: refreshToken2 },
+    });
+
+    expect(afterTheft.statusCode).toBe(401);
+  });
+
+  it('terminating sessions invalidates access tokens via JTI blacklist', async () => {
+    const register = await app.inject({
+      method: 'POST',
+      url: '/auth/register',
+      payload: {
+        email: 'sessions@example.com',
+        password: 'Str0ngP@ss!123',
+        firstName: 'Sess',
+        lastName: 'User',
+      },
+    });
+    expect(register.statusCode).toBe(201);
+
+    const { accessToken } = register.json<{ accessToken: string }>();
+    expect(accessToken).toBeTruthy();
+
+    const terminate = await app.inject({
+      method: 'DELETE',
+      url: '/users/me/sessions',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    expect(terminate.statusCode).toBe(200);
+
+    const meAfter = await app.inject({
+      method: 'GET',
+      url: '/auth/me',
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    expect(meAfter.statusCode).toBe(401);
   });
 });

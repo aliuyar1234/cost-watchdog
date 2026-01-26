@@ -9,15 +9,19 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 import { requireScope } from '../lib/api-key-scopes.js';
 import { logAuditEvent } from '../lib/audit.js';
 import { getAuditContext } from '../middleware/request-context.js';
+import { getUserRestrictions, buildAccessFilter } from '../lib/access-control.js';
+import { TtlCache } from '../lib/ttl-cache.js';
 
 // Maximum limit for list queries
 const MAX_LIMIT = 100;
 
 interface AnomalyWithRelations extends Anomaly {
-  costRecord: (CostRecord & {
-    location: Location | null;
-    supplier: Supplier | null;
-  }) | null;
+  costRecord:
+    | (CostRecord & {
+        location: Location | null;
+        supplier: Supplier | null;
+      })
+    | null;
 }
 
 interface AnomalyQuery {
@@ -46,6 +50,10 @@ interface UpdateStatusBody {
 const VALID_STATUSES = ['new', 'acknowledged', 'resolved', 'false_positive'] as const;
 const MAX_RESOLUTION_LENGTH = 2000;
 
+const ANOMALY_STATS_CACHE_TTL_MS = 30 * 1000;
+const ANOMALY_STATS_CACHE_CONTROL = 'private, max-age=30';
+const anomalyStatsCache = new TtlCache<unknown>(ANOMALY_STATS_CACHE_TTL_MS, 200);
+
 // Include clause for anomaly queries with relations
 const ANOMALY_INCLUDE = {
   costRecord: {
@@ -55,6 +63,11 @@ const ANOMALY_INCLUDE = {
     },
   },
 } as const;
+
+async function getAnomalyAccessFilter(userId: string): Promise<Record<string, unknown>> {
+  const restrictions = await getUserRestrictions(userId);
+  return restrictions.hasRestrictions ? { costRecord: buildAccessFilter(restrictions) } : {};
+}
 
 /**
  * Anomaly routes
@@ -73,43 +86,41 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /anomalies - List anomalies
    */
-  fastify.get<{ Querystring: AnomalyQuery }>(
-    '/',
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.get<{ Querystring: AnomalyQuery }>('/', async (request, reply) => {
+    const user = request.user!;
 
-      const query = request.query as AnomalyQuery;
-      const limit = Math.min(Number(query.limit) || 20, MAX_LIMIT);
-      const offset = Number(query.offset) || 0;
+    const accessFilter = await getAnomalyAccessFilter(user.sub);
+    const query = request.query as AnomalyQuery;
+    const limit = Math.min(Number(query.limit) || 20, MAX_LIMIT);
+    const offset = Number(query.offset) || 0;
 
-      const where: Record<string, unknown> = {};
-      if (query.status) where['status'] = query.status;
-      if (query.severity) where['severity'] = query.severity;
-      if (query.costRecordId) where['costRecordId'] = query.costRecordId;
-      if (query.type) where['type'] = query.type;
+    const where: Record<string, unknown> = { ...accessFilter };
+    if (query.status) where['status'] = query.status;
+    if (query.severity) where['severity'] = query.severity;
+    if (query.costRecordId) where['costRecordId'] = query.costRecordId;
+    if (query.type) where['type'] = query.type;
 
-      const [data, total] = await Promise.all([
-        prisma.anomaly.findMany({
-          where,
-          include: ANOMALY_INCLUDE,
-          orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }],
-          take: limit,
-          skip: offset,
-        }),
-        prisma.anomaly.count({ where }),
-      ]);
+    const [data, total] = await Promise.all([
+      prisma.anomaly.findMany({
+        where,
+        include: ANOMALY_INCLUDE,
+        orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }],
+        take: limit,
+        skip: offset,
+      }),
+      prisma.anomaly.count({ where }),
+    ]);
 
-      return reply.send({
-        data: data.map(formatAnomaly),
-        pagination: {
-          total,
-          limit,
-          offset,
-          hasMore: offset + data.length < total,
-        },
-      });
-    }
-  );
+    return reply.send({
+      data: data.map(formatAnomaly),
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
+      },
+    });
+  });
 
   /**
    * GET /anomalies/stats - Get anomaly statistics
@@ -117,24 +128,34 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/stats', async (request, reply) => {
     const user = request.user!;
 
+    const cacheKey = `anomalies:stats:${user.sub}`;
+    const cached = anomalyStatsCache.get(cacheKey);
+    if (cached) {
+      reply.header('Cache-Control', ANOMALY_STATS_CACHE_CONTROL);
+      return reply.send(cached);
+    }
+
+    const accessFilter = await getAnomalyAccessFilter(user.sub);
     const [byStatus, bySeverity, byType, recent] = await Promise.all([
       prisma.anomaly.groupBy({
         by: ['status'],
         _count: true,
+        where: accessFilter,
       }),
       prisma.anomaly.groupBy({
         by: ['severity'],
         _count: true,
-        where: { status: 'new' },
+        where: { status: 'new', ...accessFilter },
       }),
       prisma.anomaly.groupBy({
         by: ['type'],
         _count: true,
-        where: { status: 'new' },
+        where: { status: 'new', ...accessFilter },
       }),
       prisma.anomaly.count({
         where: {
           status: 'new',
+          ...accessFilter,
           detectedAt: {
             gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
           },
@@ -142,56 +163,67 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      byStatus: byStatus.reduce((acc, item) => {
-        acc[item.status] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      bySeverity: bySeverity.reduce((acc, item) => {
-        acc[item.severity] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
-      byType: byType.reduce((acc, item) => {
-        acc[item.type] = item._count;
-        return acc;
-      }, {} as Record<string, number>),
+    const payload = {
+      byStatus: byStatus.reduce(
+        (acc, item) => {
+          acc[item.status] = item._count;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
+      bySeverity: bySeverity.reduce(
+        (acc, item) => {
+          acc[item.severity] = item._count;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
+      byType: byType.reduce(
+        (acc, item) => {
+          acc[item.type] = item._count;
+          return acc;
+        },
+        {} as Record<string, number>,
+      ),
       newLast24h: recent,
-    });
+    };
+
+    anomalyStatsCache.set(cacheKey, payload);
+    reply.header('Cache-Control', ANOMALY_STATS_CACHE_CONTROL);
+    return reply.send(payload);
   });
 
   /**
    * GET /anomalies/:id - Get single anomaly
    */
-  fastify.get<{ Params: AnomalyIdParams }>(
-    '/:id',
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.get<{ Params: AnomalyIdParams }>('/:id', async (request, reply) => {
+    const user = request.user!;
 
-      const { id } = request.params;
+    const { id } = request.params;
 
-      if (!isValidUUID(id)) {
-        return sendNotFound(reply, 'Anomaly');
-      }
+    if (!isValidUUID(id)) {
+      return sendNotFound(reply, 'Anomaly');
+    }
 
-      const anomaly = await prisma.anomaly.findUnique({
-        where: { id },
-        include: {
-          costRecord: {
-            include: {
-              location: true,
-              supplier: true,
-            },
+    const accessFilter = await getAnomalyAccessFilter(user.sub);
+    const anomaly = await prisma.anomaly.findFirst({
+      where: { id, ...accessFilter },
+      include: {
+        costRecord: {
+          include: {
+            location: true,
+            supplier: true,
           },
         },
-      });
+      },
+    });
 
-      if (!anomaly) {
-        return sendNotFound(reply, 'Anomaly');
-      }
-
-      return reply.send(formatAnomaly(anomaly));
+    if (!anomaly) {
+      return sendNotFound(reply, 'Anomaly');
     }
-  );
+
+    return reply.send(formatAnomaly(anomaly));
+  });
 
   /**
    * POST /anomalies/:id/acknowledge
@@ -213,13 +245,17 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Validate resolution length
       if (resolution && resolution.length > MAX_RESOLUTION_LENGTH) {
-        return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
+        return sendBadRequest(
+          reply,
+          `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`,
+        );
       }
 
       // Sanitize resolution input to prevent XSS
       const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : undefined;
 
-      const existing = await prisma.anomaly.findUnique({ where: { id } });
+      const accessFilter = await getAnomalyAccessFilter(user.sub);
+      const existing = await prisma.anomaly.findFirst({ where: { id, ...accessFilter } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
       }
@@ -243,13 +279,17 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         action: 'acknowledge',
         before: { status: existing.status },
         after: { status: 'acknowledged' },
-        metadata: { resolution: sanitizedResolution, anomalyType: existing.type, severity: existing.severity },
+        metadata: {
+          resolution: sanitizedResolution,
+          anomalyType: existing.type,
+          severity: existing.severity,
+        },
         performedBy: user.sub,
         ...ctx,
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.send(formatAnomaly(anomaly));
-    }
+    },
   );
 
   /**
@@ -272,13 +312,17 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Validate resolution length
       if (resolution && resolution.length > MAX_RESOLUTION_LENGTH) {
-        return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
+        return sendBadRequest(
+          reply,
+          `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`,
+        );
       }
 
       // Sanitize resolution input to prevent XSS
       const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : undefined;
 
-      const existing = await prisma.anomaly.findUnique({ where: { id } });
+      const accessFilter = await getAnomalyAccessFilter(user.sub);
+      const existing = await prisma.anomaly.findFirst({ where: { id, ...accessFilter } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
       }
@@ -303,13 +347,17 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         action: 'update',
         before: { status: existing.status },
         after: { status: 'resolved' },
-        metadata: { resolution: sanitizedResolution, anomalyType: existing.type, severity: existing.severity },
+        metadata: {
+          resolution: sanitizedResolution,
+          anomalyType: existing.type,
+          severity: existing.severity,
+        },
         performedBy: user.sub,
         ...ctx,
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.send(formatAnomaly(anomaly));
-    }
+    },
   );
 
   /**
@@ -332,13 +380,19 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Validate resolution length
       if (resolution && resolution.length > MAX_RESOLUTION_LENGTH) {
-        return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
+        return sendBadRequest(
+          reply,
+          `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`,
+        );
       }
 
       // Sanitize resolution input to prevent XSS
-      const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : 'Marked as false positive';
+      const sanitizedResolution = resolution
+        ? sanitizeTextArea(resolution)
+        : 'Marked as false positive';
 
-      const existing = await prisma.anomaly.findUnique({ where: { id } });
+      const accessFilter = await getAnomalyAccessFilter(user.sub);
+      const existing = await prisma.anomaly.findFirst({ where: { id, ...accessFilter } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
       }
@@ -362,13 +416,17 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
         action: 'update',
         before: { status: existing.status },
         after: { status: 'false_positive' },
-        metadata: { resolution: sanitizedResolution, anomalyType: existing.type, severity: existing.severity },
+        metadata: {
+          resolution: sanitizedResolution,
+          anomalyType: existing.type,
+          severity: existing.severity,
+        },
         performedBy: user.sub,
         ...ctx,
       }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
       return reply.send(formatAnomaly(anomaly));
-    }
+    },
   );
 
   /**
@@ -390,19 +448,26 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
       const { status, resolution } = request.body as UpdateStatusBody;
 
       // Validate status enum
-      if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
-        return sendBadRequest(reply, `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`);
+      if (!VALID_STATUSES.includes(status as (typeof VALID_STATUSES)[number])) {
+        return sendBadRequest(
+          reply,
+          `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+        );
       }
 
       // Validate resolution length
       if (resolution && resolution.length > MAX_RESOLUTION_LENGTH) {
-        return sendBadRequest(reply, `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`);
+        return sendBadRequest(
+          reply,
+          `Resolution must be at most ${MAX_RESOLUTION_LENGTH} characters`,
+        );
       }
 
       // Sanitize resolution input to prevent XSS
       const sanitizedResolution = resolution ? sanitizeTextArea(resolution) : undefined;
 
-      const existing = await prisma.anomaly.findUnique({ where: { id } });
+      const accessFilter = await getAnomalyAccessFilter(user.sub);
+      const existing = await prisma.anomaly.findFirst({ where: { id, ...accessFilter } });
       if (!existing) {
         return sendNotFound(reply, 'Anomaly');
       }
@@ -425,7 +490,7 @@ export const anomalyRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       return reply.send(formatAnomaly(anomaly));
-    }
+    },
   );
 };
 

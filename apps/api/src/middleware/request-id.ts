@@ -30,7 +30,9 @@ declare module 'fastify' {
 async function requestIdMiddleware(fastify: FastifyInstance): Promise<void> {
   // Add request ID to every request
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
-    const requestId = extractOrGenerateRequestId(request.headers as Record<string, string | string[] | undefined>);
+    const requestId = extractOrGenerateRequestId(
+      request.headers as Record<string, string | string[] | undefined>,
+    );
 
     // Store on request object
     request.requestId = requestId;
@@ -43,7 +45,7 @@ async function requestIdMiddleware(fastify: FastifyInstance): Promise<void> {
   });
 
   // Wrap request handler in async context for deep call stack access
-  fastify.addHook('preHandler', async (request: FastifyRequest) => {
+  fastify.addHook('preHandler', async (_request: FastifyRequest) => {
     // Note: For full async context, the route handler needs to be wrapped
     // This hook adds the context for preHandler hooks
   });
@@ -63,7 +65,7 @@ export default fp(requestIdMiddleware, {
  * This enables getCurrentRequestId() in deep call stacks.
  */
 export function withRequestContext<T>(
-  handler: (request: FastifyRequest, reply: FastifyReply) => Promise<T>
+  handler: (request: FastifyRequest, reply: FastifyReply) => Promise<T>,
 ): (request: FastifyRequest, reply: FastifyReply) => Promise<T> {
   return (request, reply) => {
     return runWithRequestContext(request.requestId, () => handler(request, reply));

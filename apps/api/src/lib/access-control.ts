@@ -32,7 +32,8 @@ export async function getUserRestrictions(userId: string): Promise<UserRestricti
     return { allowedLocationIds: [], allowedCostCenterIds: [], hasRestrictions: false };
   }
 
-  const hasRestrictions = user.allowedLocationIds.length > 0 || user.allowedCostCenterIds.length > 0;
+  const hasRestrictions =
+    user.allowedLocationIds.length > 0 || user.allowedCostCenterIds.length > 0;
 
   return {
     allowedLocationIds: user.allowedLocationIds,
@@ -65,7 +66,7 @@ export function buildAccessFilter(restrictions: UserRestrictions): Record<string
     return { OR: filters };
   }
 
-  return filters[0] as Record<string, unknown> || {};
+  return (filters[0] as Record<string, unknown>) || {};
 }
 
 /**
@@ -74,7 +75,7 @@ export function buildAccessFilter(restrictions: UserRestrictions): Record<string
  */
 export function buildNestedAccessFilter(
   restrictions: UserRestrictions,
-  relationPath: string
+  relationPath: string,
 ): Record<string, unknown> {
   if (!restrictions.hasRestrictions) {
     return {};

@@ -7,14 +7,21 @@ import { secrets } from './secrets.js';
  * In production, REDIS_URL must be explicitly set.
  */
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
-const REDIS_URL_SECRET = secrets.getRedisUrl();
+const REDIS_URL_SECRET_OR_ENV = secrets.getRedisUrl();
 
 // Validate Redis URL in production
-if (IS_PRODUCTION && !REDIS_URL_SECRET) {
+if (IS_PRODUCTION && !REDIS_URL_SECRET_OR_ENV) {
   throw new Error('FATAL: REDIS_URL is required in production (via Docker secret or env var)');
 }
 
-const REDIS_URL = REDIS_URL_SECRET || 'redis://localhost:6379';
+const REDIS_URL = REDIS_URL_SECRET_OR_ENV || process.env['REDIS_URL'] || 'redis://localhost:6379';
+
+function attachRedisErrorHandler(client: Redis, context: string): void {
+  client.on('error', (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Redis:${context}] ${message}`);
+  });
+}
 
 /**
  * Shared Redis client for general operations.
@@ -23,16 +30,19 @@ export const redis = new Redis(REDIS_URL, {
   maxRetriesPerRequest: null, // Required for BullMQ
   enableReadyCheck: false,
 });
+attachRedisErrorHandler(redis, 'shared');
 
 /**
  * Create a new Redis connection for BullMQ workers.
  * Each worker needs its own connection.
  */
 export function createRedisConnection(): Redis {
-  return new Redis(REDIS_URL, {
+  const connection = new Redis(REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   });
+  attachRedisErrorHandler(connection, 'bullmq');
+  return connection;
 }
 
 /**

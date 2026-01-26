@@ -50,7 +50,7 @@ function isAdmin(role: string): boolean {
 async function resolveAndAuthorize(
   request: FastifyRequest,
   reply: FastifyReply,
-  targetUserId: string
+  targetUserId: string,
 ): Promise<{ userId: string; targetUser: { id: string; email: string } } | null> {
   const user = request.user!;
 
@@ -68,7 +68,7 @@ async function resolveAndAuthorize(
   const userIsAdmin = isAdmin(user.role);
 
   if (!isSelf && !userIsAdmin) {
-    sendForbidden(reply, 'Admin access required to view other users\' sessions');
+    sendForbidden(reply, "Admin access required to view other users' sessions");
     return null;
   }
 
@@ -99,69 +99,63 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
    * List all active sessions for a user.
    * Admin can view any user's sessions, users can only view their own.
    */
-  fastify.get<{ Params: UserIdParams }>(
-    '/:id/sessions',
-    async (request, reply) => {
-      const auth = await resolveAndAuthorize(request, reply, request.params.id);
-      if (!auth) return;
+  fastify.get<{ Params: UserIdParams }>('/:id/sessions', async (request, reply) => {
+    const auth = await resolveAndAuthorize(request, reply, request.params.id);
+    if (!auth) return;
 
-      const { userId } = auth;
-      const currentSessionId = request.user!.jti;
+    const { userId } = auth;
+    const currentSessionId = request.user!.jti;
 
-      const sessions = await listUserSessions(userId, currentSessionId);
+    const sessions = await listUserSessions(userId, currentSessionId);
 
-      return reply.send({
-        sessions,
-        count: sessions.length,
-      });
-    }
-  );
+    return reply.send({
+      sessions,
+      count: sessions.length,
+    });
+  });
 
   /**
    * DELETE /users/:id/sessions
    * Terminate all sessions for a user (except current if self).
    * Admin can terminate any user's sessions, users can only terminate their own.
    */
-  fastify.delete<{ Params: UserIdParams }>(
-    '/:id/sessions',
-    async (request, reply) => {
-      const auth = await resolveAndAuthorize(request, reply, request.params.id);
-      if (!auth) return;
+  fastify.delete<{ Params: UserIdParams }>('/:id/sessions', async (request, reply) => {
+    const auth = await resolveAndAuthorize(request, reply, request.params.id);
+    if (!auth) return;
 
-      const { userId, targetUser } = auth;
-      const currentUser = request.user!;
-      const isSelf = userId === currentUser.sub;
+    const { userId } = auth;
+    const currentUser = request.user!;
+    const isSelf = userId === currentUser.sub;
 
-      // Get sessions before termination for audit log
-      const sessions = await listUserSessions(userId);
+    // Get sessions before termination for audit log
+    const sessions = await listUserSessions(userId);
 
-      // Terminate all sessions
-      const count = await terminateAllSessions(userId);
+    // Terminate all sessions
+    const count = await terminateAllSessions(userId);
 
-      // Audit log
-      const ctx = getAuditContext(request);
-      await logAuditEvent({
-        entityType: 'user',
-        entityId: userId,
-        action: 'session_terminate',
-        metadata: {
-          terminatedBy: currentUser.sub,
-          terminatedByEmail: currentUser.email,
-          sessionCount: count,
-          sessionIds: sessions.map(s => s.sessionId),
-          reason: isSelf ? 'user_initiated' : 'admin_initiated',
-        },
-        performedBy: currentUser.sub,
-        ...ctx,
-      }).catch((err) => request.log.error(err, 'Failed to log audit event'));
+    // Audit log
+    const ctx = getAuditContext(request);
+    await logAuditEvent({
+      entityType: 'user',
+      entityId: userId,
+      action: 'session_terminate',
+      metadata: {
+        terminatedBy: currentUser.sub,
+        terminatedByEmail: currentUser.email,
+        sessionCount: count,
+        sessionIds: sessions.map((s) => s.sessionId),
+        reason: isSelf ? 'user_initiated' : 'admin_initiated',
+      },
+      performedBy: currentUser.sub,
+      ...ctx,
+    }).catch((err) => request.log.error(err, 'Failed to log audit event'));
 
-      return reply.send({
-        success: true,
-        message: `Terminated ${count} session(s)`,
-        terminatedCount: count,
-      });
-    }
-  );
+    return reply.send({
+      success: true,
+      message: `Terminated ${count} session(s)`,
+      terminatedCount: count,
+    });
+  });
 
   /**
    * DELETE /users/:id/sessions/:sessionId
@@ -173,7 +167,7 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
       const auth = await resolveAndAuthorize(request, reply, request.params.id);
       if (!auth) return;
 
-      const { userId, targetUser } = auth;
+      const { userId } = auth;
       const { sessionId } = request.params;
       const currentUser = request.user!;
 
@@ -232,7 +226,7 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
         message: 'Session terminated successfully',
         sessionId,
       });
-    }
+    },
   );
 };
 

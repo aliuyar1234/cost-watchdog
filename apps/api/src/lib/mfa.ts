@@ -6,7 +6,7 @@
  */
 
 import { authenticator } from 'otplib';
-import { createHash, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import { hash, verify } from '@node-rs/argon2';
 import { prisma } from './db.js';
 import { encrypt, decrypt } from './field-encryption.js';
@@ -129,7 +129,10 @@ export async function hashBackupCodes(codes: string[]): Promise<string[]> {
 /**
  * Verify a backup code against hashed codes.
  */
-export async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<number | null> {
+export async function verifyBackupCode(
+  code: string,
+  hashedCodes: string[],
+): Promise<number | null> {
   const normalized = code.replace(/-/g, '').toLowerCase();
 
   for (let i = 0; i < hashedCodes.length; i++) {
@@ -217,7 +220,10 @@ export async function recordMfaAttempt(userId: string, success: boolean): Promis
  * Start MFA enrollment for a user.
  * Creates a pending enrollment that must be verified.
  */
-export async function startMfaEnrollment(user: { id: string; email: string }): Promise<MfaEnrollmentResult> {
+export async function startMfaEnrollment(user: {
+  id: string;
+  email: string;
+}): Promise<MfaEnrollmentResult> {
   // Check if user already has active MFA
   const existing = await prisma.mfaEnrollment.findFirst({
     where: { userId: user.id, verified: true },
@@ -272,7 +278,7 @@ export async function startMfaEnrollment(user: { id: string; email: string }): P
 export async function verifyMfaEnrollment(
   userId: string,
   enrollmentId: string,
-  code: string
+  code: string,
 ): Promise<{ success: boolean; error?: string }> {
   const enrollment = await prisma.mfaEnrollment.findFirst({
     where: {
@@ -324,10 +330,7 @@ export async function verifyMfaEnrollment(
 /**
  * Verify a TOTP code for login.
  */
-export async function verifyMfaCode(
-  userId: string,
-  code: string
-): Promise<MfaVerificationResult> {
+export async function verifyMfaCode(userId: string, code: string): Promise<MfaVerificationResult> {
   // Check rate limit
   const rateLimit = await checkMfaRateLimit(userId);
   if (!rateLimit.allowed) {
@@ -367,10 +370,12 @@ export async function verifyMfaCode(
   }
 
   // Update last used time
-  await prisma.mfaEnrollment.update({
-    where: { id: enrollment.id },
-    data: { lastUsedAt: new Date() },
-  }).catch(() => {}); // Fire and forget
+  await prisma.mfaEnrollment
+    .update({
+      where: { id: enrollment.id },
+      data: { lastUsedAt: new Date() },
+    })
+    .catch(() => {}); // Fire and forget
 
   return { success: true };
 }
@@ -379,10 +384,7 @@ export async function verifyMfaCode(
  * Use a backup code for login.
  * Note: backupCodesUsed is a simple counter, so we track which codes are used via the counter
  */
-export async function useBackupCode(
-  userId: string,
-  code: string
-): Promise<BackupCodeUseResult> {
+export async function useBackupCode(userId: string, code: string): Promise<BackupCodeUseResult> {
   // Check rate limit
   const rateLimit = await checkMfaRateLimit(userId);
   if (!rateLimit.allowed) {

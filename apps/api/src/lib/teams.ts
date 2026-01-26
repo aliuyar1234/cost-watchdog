@@ -205,7 +205,7 @@ function buildAnomalyAlertCard(data: TeamsAnomalyAlertData): AdaptiveCard {
       items: [
         {
           type: 'TextBlock',
-          text: '🔍 Cost Watchdog - Kostenanomalie erkannt',
+          text: 'Cost Watchdog - Kostenanomalie erkannt',
           size: 'Medium',
           weight: 'Bolder',
           color: 'Default',
@@ -297,7 +297,7 @@ function buildDigestCard(data: TeamsDigestData): AdaptiveCard {
       items: [
         {
           type: 'TextBlock',
-          text: `📊 Cost Watchdog - Tägliche Zusammenfassung`,
+          text: `Cost Watchdog - Tägliche Zusammenfassung`,
           size: 'Medium',
           weight: 'Bolder',
           wrap: true,
@@ -412,7 +412,7 @@ function buildDigestCard(data: TeamsDigestData): AdaptiveCard {
       items: [
         {
           type: 'TextBlock',
-          text: '✅ Keine neuen Anomalien heute!',
+          text: 'Keine neuen Anomalien heute!',
           weight: 'Bolder',
           wrap: true,
         },
@@ -450,7 +450,7 @@ function isAllowedTeamsHost(url: string): boolean {
     const parsed = new URL(url);
     return (
       parsed.protocol === 'https:' &&
-      ALLOWED_TEAMS_HOST_SUFFIXES.some(suffix => parsed.hostname.endsWith(suffix))
+      ALLOWED_TEAMS_HOST_SUFFIXES.some((suffix) => parsed.hostname.endsWith(suffix))
     );
   } catch {
     return false;
@@ -464,7 +464,11 @@ async function sendWebhook(webhookUrl: string, card: AdaptiveCard): Promise<Team
   // Validate webhook URL against allowed hosts (SSRF protection)
   if (!isAllowedTeamsHost(webhookUrl)) {
     console.error('[Teams] Rejected webhook URL - not an allowed Teams host:', webhookUrl);
-    return { success: false, error: 'Invalid Teams webhook URL: must be https://*.webhook.office.com or https://*.logic.azure.com' };
+    return {
+      success: false,
+      error:
+        'Invalid Teams webhook URL: must be https://*.webhook.office.com or https://*.logic.azure.com',
+    };
   }
 
   const message: TeamsMessage = {
@@ -557,7 +561,7 @@ export async function testTeamsWebhook(webhookUrl: string): Promise<TeamsResult>
         items: [
           {
             type: 'TextBlock',
-            text: '✅ Cost Watchdog Verbindungstest',
+            text: 'Cost Watchdog Verbindungstest',
             size: 'Medium',
             weight: 'Bolder',
             wrap: true,

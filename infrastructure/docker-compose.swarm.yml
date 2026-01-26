@@ -60,30 +60,30 @@ services:
       - s3_secret_key
     # Secrets are mounted as files at /run/secrets/<name>
     # App reads directly from files via lib/secrets.ts - no env var export needed
-    entrypoint: ["/sbin/tini", "--"]
-    command: ["node", "dist/index.js"]
+    entrypoint: ['/sbin/tini', '--']
+    command: ['node', 'dist/index.js']
     networks:
       - app-network
       - traefik-public
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3001/health']
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "5"
-        labels: "service,env"
+        max-size: '10m'
+        max-file: '5'
+        labels: 'service,env'
     labels:
       # Traefik labels for automatic TLS and routing
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.${DOMAIN:?DOMAIN is required}`)"
-      - "traefik.http.routers.api.entrypoints=websecure"
-      - "traefik.http.routers.api.tls.certresolver=letsencrypt"
-      - "traefik.http.services.api.loadbalancer.server.port=3001"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.api.rule=Host(`api.${DOMAIN:?DOMAIN is required}`)'
+      - 'traefik.http.routers.api.entrypoints=websecure'
+      - 'traefik.http.routers.api.tls.certresolver=letsencrypt'
+      - 'traefik.http.services.api.loadbalancer.server.port=3001'
 
   web:
     image: cost-watchdog-web:${VERSION:?VERSION is required}
@@ -120,22 +120,22 @@ services:
       - app-network
       - traefik-public
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000']
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "5"
+        max-size: '10m'
+        max-file: '5'
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=Host(`${DOMAIN:?DOMAIN is required}`)"
-      - "traefik.http.routers.web.entrypoints=websecure"
-      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
-      - "traefik.http.services.web.loadbalancer.server.port=3000"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.web.rule=Host(`${DOMAIN:?DOMAIN is required}`)'
+      - 'traefik.http.routers.web.entrypoints=websecure'
+      - 'traefik.http.routers.web.tls.certresolver=letsencrypt'
+      - 'traefik.http.services.web.loadbalancer.server.port=3000'
 
   worker:
     image: cost-watchdog-api:${VERSION:?VERSION is required}
@@ -166,8 +166,6 @@ services:
       S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
       WEB_URL: ${WEB_URL:?WEB_URL is required}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
     secrets:
       - db_url
       - redis_url
@@ -175,23 +173,31 @@ services:
       - field_encryption_key
       - s3_access_key
       - s3_secret_key
+      - anthropic_api_key
+      - resend_api_key
     # Secrets are mounted as files at /run/secrets/<name>
     # App reads directly from files via lib/secrets.ts - no env var export needed
-    entrypoint: ["/sbin/tini", "--"]
-    command: ["node", "dist/workers/index.js"]
+    entrypoint: ['/sbin/tini', '--']
+    command: ['node', 'dist/workers/index.js']
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "node", "-e", "const Redis = require('ioredis'); const r = new Redis(process.env.REDIS_URL || require('fs').readFileSync('/run/secrets/redis_url', 'utf8').trim()); r.ping().then(() => { r.quit(); process.exit(0); }).catch(() => process.exit(1));"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "const Redis = require('ioredis'); const r = new Redis(process.env.REDIS_URL || require('fs').readFileSync('/run/secrets/redis_url', 'utf8').trim()); r.ping().then(() => { r.quit(); process.exit(0); }).catch(() => process.exit(1));",
+        ]
       interval: 30s
       timeout: 10s
       start_period: 15s
       retries: 3
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "5"
+        max-size: '10m'
+        max-file: '5'
 
 networks:
   app-network:
@@ -213,6 +219,10 @@ secrets:
     external: true
   s3_secret_key:
     external: true
+  anthropic_api_key:
+    external: true
+  resend_api_key:
+    external: true
 
 # =============================================================================
 # Setup Instructions:
@@ -230,6 +240,8 @@ secrets:
 #    openssl rand -base64 32 | docker secret create field_encryption_key -
 #    echo "your-s3-access-key" | docker secret create s3_access_key -
 #    echo "your-s3-secret-key" | docker secret create s3_secret_key -
+#    echo "your-anthropic-api-key" | docker secret create anthropic_api_key -
+#    echo "your-resend-api-key" | docker secret create resend_api_key -
 #
 # 4. Build images (web build requires NEXT_PUBLIC_API_URL):
 #    docker build -t cost-watchdog-api:v1.0.0 -f apps/api/Dockerfile .

@@ -17,6 +17,7 @@ import {
 import { authenticate, extractToken } from '../middleware/auth.js';
 import { getAuditContext } from '../middleware/request-context.js';
 import { authService, type AuthContext } from '../services/auth.service.js';
+import { rateLimitEndpoint } from '../lib/rate-limit.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -27,7 +28,7 @@ const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: IS_PRODUCTION,
-  sameSite: IS_PRODUCTION ? 'strict' as const : 'lax' as const,
+  sameSite: IS_PRODUCTION ? ('strict' as const) : ('lax' as const),
   path: '/',
 };
 
@@ -35,11 +36,7 @@ const COOKIE_OPTIONS = {
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function setAuthCookies(
-  reply: FastifyReply,
-  accessToken: string,
-  refreshToken: string
-): void {
+function setAuthCookies(reply: FastifyReply, accessToken: string, refreshToken: string): void {
   reply.setCookie('accessToken', accessToken, {
     ...COOKIE_OPTIONS,
     maxAge: 15 * 60,
@@ -53,6 +50,12 @@ function setAuthCookies(
 function clearAuthCookies(reply: FastifyReply): void {
   reply.clearCookie('accessToken', COOKIE_OPTIONS);
   reply.clearCookie('refreshToken', COOKIE_OPTIONS);
+}
+
+function shouldReturnTokens(request: FastifyRequest): boolean {
+  // Browsers include an Origin header for cross-origin fetch requests. In that case we rely on
+  // HttpOnly cookies and avoid returning tokens in the JSON response to reduce token exfil risk.
+  return !request.headers.origin;
 }
 
 function getContext(request: FastifyRequest): AuthContext {
@@ -75,6 +78,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
   fastify.post<{ Body: RegisterInput }>(
     '/register',
     {
+      preHandler: [rateLimitEndpoint('auth')],
       schema: {
         body: {
           type: 'object',
@@ -102,7 +106,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         const result = await authService.register(
           parseResult.data,
           getContext(request),
-          request.log
+          request.log,
         );
 
         if (!result.success) {
@@ -115,11 +119,13 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
         setAuthCookies(reply, result.accessToken, result.refreshToken);
 
-        return reply.code(201).send({
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-        });
+        const response: Record<string, unknown> = { user: result.user };
+        if (shouldReturnTokens(request)) {
+          response['accessToken'] = result.accessToken;
+          response['refreshToken'] = result.refreshToken;
+        }
+
+        return reply.code(201).send(response);
       } catch (error) {
         request.log.error(error, 'Registration failed');
         return reply.code(500).send({
@@ -127,7 +133,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           message: 'Failed to create account',
         });
       }
-    }
+    },
   );
 
   /**
@@ -136,6 +142,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
   fastify.post<{ Body: LoginInput }>(
     '/login',
     {
+      preHandler: [rateLimitEndpoint('auth')],
       schema: {
         body: {
           type: 'object',
@@ -158,11 +165,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
       }
 
       try {
-        const result = await authService.login(
-          parseResult.data,
-          getContext(request),
-          request.log
-        );
+        const result = await authService.login(parseResult.data, getContext(request), request.log);
 
         if (!result.success) {
           return reply.code(result.statusCode).send({
@@ -174,11 +177,13 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
         setAuthCookies(reply, result.accessToken, result.refreshToken);
 
-        return reply.send({
-          user: result.user,
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-        });
+        const response: Record<string, unknown> = { user: result.user };
+        if (shouldReturnTokens(request)) {
+          response['accessToken'] = result.accessToken;
+          response['refreshToken'] = result.refreshToken;
+        }
+
+        return reply.send(response);
       } catch (error) {
         request.log.error(error, 'Login failed');
         return reply.code(500).send({
@@ -186,7 +191,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           message: 'Login failed',
         });
       }
-    }
+    },
   );
 
   /**
@@ -195,6 +200,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
   fastify.post<{ Body: RefreshTokenInput }>(
     '/refresh',
     {
+      preHandler: [rateLimitEndpoint('auth')],
       schema: {
         body: {
           type: 'object',
@@ -215,11 +221,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
       }
 
       try {
-        const result = await authService.refresh(
-          refreshToken,
-          getContext(request),
-          request.log
-        );
+        const result = await authService.refresh(refreshToken, getContext(request), request.log);
 
         if (!result.success) {
           if (result.securityEvent) {
@@ -234,11 +236,13 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
 
         setAuthCookies(reply, result.accessToken, result.refreshToken);
 
-        return reply.send({
-          accessToken: result.accessToken,
-          refreshToken: result.refreshToken,
-          sessionId: result.sessionId,
-        });
+        const response: Record<string, unknown> = { sessionId: result.sessionId };
+        if (shouldReturnTokens(request)) {
+          response['accessToken'] = result.accessToken;
+          response['refreshToken'] = result.refreshToken;
+        }
+
+        return reply.send(response);
       } catch (error) {
         request.log.error(error, 'Token refresh failed');
         return reply.code(500).send({
@@ -246,63 +250,59 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           message: 'Token refresh failed',
         });
       }
-    }
+    },
   );
 
   /**
    * GET /auth/me
    */
-  fastify.get(
-    '/me',
-    { preHandler: [authenticate] },
-    async (request, reply) => {
-      if (!request.user) {
-        return reply.code(401).send({
-          error: 'Unauthorized',
-          message: 'Not authenticated',
-        });
-      }
-
-      try {
-        const user = await prisma.user.findUnique({
-          where: { id: request.user.sub },
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            avatarUrl: true,
-            permissions: true,
-            allowedLocationIds: true,
-            allowedCostCenterIds: true,
-            lastLoginAt: true,
-            createdAt: true,
-          },
-        });
-
-        if (!user) {
-          return reply.code(404).send({
-            error: 'Not Found',
-            message: 'User not found',
-          });
-        }
-
-        const settings = await prisma.appSettings.findFirst();
-
-        return reply.send({
-          user,
-          app: settings ? { name: settings.name, plan: settings.plan } : null,
-        });
-      } catch (error) {
-        request.log.error(error, 'Failed to get user info');
-        return reply.code(500).send({
-          error: 'Internal Server Error',
-          message: 'Failed to get user info',
-        });
-      }
+  fastify.get('/me', { preHandler: [authenticate] }, async (request, reply) => {
+    if (!request.user) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Not authenticated',
+      });
     }
-  );
+
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: request.user.sub },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          avatarUrl: true,
+          permissions: true,
+          allowedLocationIds: true,
+          allowedCostCenterIds: true,
+          lastLoginAt: true,
+          createdAt: true,
+        },
+      });
+
+      if (!user) {
+        return reply.code(404).send({
+          error: 'Not Found',
+          message: 'User not found',
+        });
+      }
+
+      const settings = await prisma.appSettings.findFirst();
+
+      return reply.send({
+        user,
+        app: settings ? { name: settings.name, plan: settings.plan } : null,
+      });
+    } catch (error) {
+      request.log.error(error, 'Failed to get user info');
+      return reply.code(500).send({
+        error: 'Internal Server Error',
+        message: 'Failed to get user info',
+      });
+    }
+  });
 
   /**
    * POST /auth/forgot-password
@@ -310,6 +310,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
   fastify.post<{ Body: { email: string } }>(
     '/forgot-password',
     {
+      preHandler: [rateLimitEndpoint('auth')],
       schema: {
         body: {
           type: 'object',
@@ -325,7 +326,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         const result = await authService.requestPasswordReset(
           request.body.email,
           getContext(request),
-          request.log
+          request.log,
         );
 
         if (!result.success) {
@@ -337,7 +338,10 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
         }
 
         if (result.token && process.env['NODE_ENV'] !== 'production') {
-          request.log.info({ resetToken: result.token }, 'Password reset token generated (dev only)');
+          request.log.info(
+            { resetToken: result.token },
+            'Password reset token generated (dev only)',
+          );
         }
 
         return reply.send({
@@ -351,7 +355,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           message: 'Failed to process password reset request',
         });
       }
-    }
+    },
   );
 
   /**
@@ -360,6 +364,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
   fastify.post<{ Body: { token: string; newPassword: string } }>(
     '/reset-password',
     {
+      preHandler: [rateLimitEndpoint('auth')],
       schema: {
         body: {
           type: 'object',
@@ -377,7 +382,7 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           request.body.token,
           request.body.newPassword,
           getContext(request),
-          request.log
+          request.log,
         );
 
         if (!result.success) {
@@ -398,40 +403,36 @@ export default async function authRoutes(fastify: FastifyInstance): Promise<void
           message: 'Failed to reset password',
         });
       }
-    }
+    },
   );
 
   /**
    * POST /auth/logout
    */
-  fastify.post(
-    '/logout',
-    { preHandler: [authenticate] },
-    async (request, reply) => {
-      try {
-        await authService.logout(
-          request.user?.sub,
-          request.user?.jti,
-          extractToken(request) ?? undefined,
-          request.cookies?.['refreshToken'] ?? undefined,
-          getContext(request),
-          request.log
-        );
+  fastify.post('/logout', { preHandler: [authenticate] }, async (request, reply) => {
+    try {
+      await authService.logout(
+        request.user?.sub,
+        request.user?.jti,
+        extractToken(request) ?? undefined,
+        request.cookies?.['refreshToken'] ?? undefined,
+        getContext(request),
+        request.log,
+      );
 
-        clearAuthCookies(reply);
+      clearAuthCookies(reply);
 
-        return reply.send({
-          success: true,
-          message: 'Logged out successfully',
-        });
-      } catch (error) {
-        request.log.error(error, 'Logout failed');
-        clearAuthCookies(reply);
-        return reply.send({
-          success: true,
-          message: 'Logged out successfully',
-        });
-      }
+      return reply.send({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    } catch (error) {
+      request.log.error(error, 'Logout failed');
+      clearAuthCookies(reply);
+      return reply.send({
+        success: true,
+        message: 'Logged out successfully',
+      });
     }
-  );
+  });
 }

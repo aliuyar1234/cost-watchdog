@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { createHash } from 'crypto';
 import { prisma } from '../lib/db.js';
+import { apiKeyUsageTotal } from '../lib/metrics.js';
 
 // Store API key scopes on the request for later scope checking
 declare module 'fastify' {
@@ -14,10 +15,7 @@ declare module 'fastify' {
  * API key authentication middleware.
  * Validates API key from X-API-Key header.
  */
-export async function validateApiKey(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function validateApiKey(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const apiKeyHeader = request.headers['x-api-key'] as string | undefined;
 
   if (!apiKeyHeader) {
@@ -32,10 +30,7 @@ export async function validateApiKey(
     where: {
       keyHash,
       isActive: true,
-      OR: [
-        { expiresAt: null },
-        { expiresAt: { gt: new Date() } },
-      ],
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
     },
   });
 
@@ -47,14 +42,17 @@ export async function validateApiKey(
   }
 
   request.isApiKeyAuth = true;
+  apiKeyUsageTotal.labels(apiKey.keyPrefix).inc();
 
   // Update last used timestamp (fire and forget)
-  prisma.apiKey.update({
-    where: { id: apiKey.id },
-    data: { lastUsedAt: new Date() },
-  }).catch((err: Error) => {
-    console.error('[ApiKey] Failed to update lastUsedAt:', err);
-  });
+  prisma.apiKey
+    .update({
+      where: { id: apiKey.id },
+      data: { lastUsedAt: new Date() },
+    })
+    .catch((err: Error) => {
+      console.error('[ApiKey] Failed to update lastUsedAt:', err);
+    });
 
   // Set request.user with API key info
   // Note: Single-tenant system - no tenantId needed
@@ -67,4 +65,3 @@ export async function validateApiKey(
   // Store scopes for later checking
   request.apiKeyScopes = apiKey.scopes;
 }
-

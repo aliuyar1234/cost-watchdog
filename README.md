@@ -1,12 +1,10 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/license-Proprietary-red.svg" alt="License">
+  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/Node.js-20+-339933.svg?logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Tests-569%20passing-success.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Security-Enterprise%20Ready-green.svg" alt="Security">
-  <img src="https://img.shields.io/badge/GDPR-Compliant-blue.svg" alt="GDPR">
-  <img src="https://img.shields.io/badge/OWASP-Top%2010-orange.svg" alt="OWASP">
+  <img src="https://img.shields.io/badge/Tests-573%20passing-success.svg" alt="Tests">
+  <img src="https://img.shields.io/badge/Security-Best%20Effort-yellow.svg" alt="Security">
 </p>
 
 <h1 align="center">Cost Watchdog</h1>
@@ -44,16 +42,16 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 
 ## Features
 
-| Feature | Beschreibung |
-|---------|-------------|
-| **Anomaly Detection** | 8 verschiedene Checks mit konfigurierbaren Schwellwerten |
-| **Multi-Channel Alerts** | E-Mail, Slack, Microsoft Teams |
-| **Daily Digest** | Zeitgesteuerte Zusammenfassung mit User-Preferences |
-| **Notification Preferences** | Pro Nutzer steuerbare Alert- und Digest-Settings |
-| **Document Processing** | PDF, Excel, CSV mit automatischer Datenextraktion |
-| **Role-Based Access** | Admin, Manager, Analyst, Viewer, Auditor |
-| **API-First** | RESTful API mit API-Key Authentifizierung |
-| **Export** | CSV/JSON Export für Compliance und Reporting |
+| Feature                      | Beschreibung                                             |
+| ---------------------------- | -------------------------------------------------------- |
+| **Anomaly Detection**        | 8 verschiedene Checks mit konfigurierbaren Schwellwerten |
+| **Multi-Channel Alerts**     | E-Mail, Slack, Microsoft Teams                           |
+| **Daily Digest**             | Zeitgesteuerte Zusammenfassung mit User-Preferences      |
+| **Notification Preferences** | Pro Nutzer steuerbare Alert- und Digest-Settings         |
+| **Document Processing**      | PDF, Excel, CSV mit automatischer Datenextraktion        |
+| **Role-Based Access**        | Admin, Manager, Analyst, Viewer, Auditor                 |
+| **API-First**                | RESTful API mit API-Key Authentifizierung                |
+| **Export**                   | CSV/JSON Export für Compliance und Reporting             |
 
 ---
 
@@ -61,19 +59,17 @@ Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch
 
 ![Cost Watchdog Architecture](./docs/watchdog-architecture.png)
 
-
-
 ## Tech Stack
 
-| Layer | Technologie | Warum |
-|-------|-------------|-------|
+| Layer        | Technologie                    | Warum                                 |
+| ------------ | ------------------------------ | ------------------------------------- |
 | **Frontend** | Next.js 14, React 18, Tailwind | Server Components, schnelle Iteration |
-| **Backend** | Fastify, TypeScript | Performance, Schema-Validierung |
-| **ORM** | Prisma | Type-Safety, Migrations |
-| **Database** | PostgreSQL 15 | JSONB, Aggregationen, Zuverlässigkeit |
-| **Queue** | Redis + BullMQ | Job Processing, Retry-Logik |
-| **Storage** | MinIO (S3-kompatibel) | Dokumente, lokal entwickeln |
-| **Monorepo** | Turborepo + pnpm | Schnelle Builds, Workspace-Protokoll |
+| **Backend**  | Fastify, TypeScript            | Performance, Schema-Validierung       |
+| **ORM**      | Prisma                         | Type-Safety, Migrations               |
+| **Database** | PostgreSQL 15                  | JSONB, Aggregationen, Zuverlässigkeit |
+| **Queue**    | Redis + BullMQ                 | Job Processing, Retry-Logik           |
+| **Storage**  | MinIO (S3-kompatibel)          | Dokumente, lokal entwickeln           |
+| **Monorepo** | Turborepo + pnpm               | Schnelle Builds, Workspace-Protokoll  |
 
 ---
 
@@ -134,7 +130,7 @@ pnpm install
 cp .env.example .env
 
 # Infrastruktur starten
-docker-compose -f infrastructure/docker-compose.yml up -d
+docker compose -f infrastructure/docker-compose.yml up -d
 
 # Datenbank initialisieren
 pnpm db:push
@@ -144,13 +140,17 @@ pnpm dev
 ```
 
 Die Anwendung ist erreichbar unter:
+
 - **Frontend:** http://localhost:3000
 - **API:** http://localhost:3001
-- **API Docs:** http://localhost:3001/documentation
+- **API Docs:** http://localhost:3001/api/v1/docs
 
 ### Erster Admin-User
 
-Der erste registrierte Benutzer wird automatisch zum Admin.
+Der erste registrierte Benutzer wird nur dann Admin, wenn `INITIAL_ADMIN_EMAIL`
+gesetzt ist und mit der ersten Registrierung uebereinstimmt. Ohne diese Variable
+werden neue Nutzer als `viewer` angelegt. Setze `INITIAL_ADMIN_EMAIL` in `.env`,
+bevor du den ersten Account erstellst.
 
 ---
 
@@ -187,25 +187,31 @@ pnpm db:studio
 
 ```bash
 # Login
-curl -X POST http://localhost:3001/auth/login \
+curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "admin@example.com", "password": "password123"}'
 
 # Mit API-Key
-curl http://localhost:3001/anomalies \
+curl http://localhost:3001/api/v1/anomalies \
   -H "X-API-Key: your-api-key"
 ```
 
+### Password Reset
+
+- `POST /api/v1/auth/forgot-password` generates a reset token. In development the token
+  is logged; in production you need to wire email delivery yourself.
+- `POST /api/v1/auth/reset-password` accepts `{ token, newPassword }`.
+
 ### Wichtige Endpoints
 
-| Methode | Endpoint | Beschreibung |
-|---------|----------|--------------|
-| `POST` | `/auth/login` | Benutzer authentifizieren |
-| `GET` | `/analytics/dashboard` | Dashboard KPIs |
-| `GET` | `/anomalies` | Anomalien auflisten |
-| `POST` | `/anomalies/:id/acknowledge` | Anomalie bestätigen |
-| `GET` | `/exports/cost-records` | Kostendaten exportieren |
-| `POST` | `/documents` | Dokument hochladen |
+| Methode | Endpoint                            | Beschreibung              |
+| ------- | ----------------------------------- | ------------------------- |
+| `POST`  | `/api/v1/auth/login`                | Benutzer authentifizieren |
+| `GET`   | `/api/v1/analytics/dashboard`       | Dashboard KPIs            |
+| `GET`   | `/api/v1/anomalies`                 | Anomalien auflisten       |
+| `POST`  | `/api/v1/anomalies/:id/acknowledge` | Anomalie bestätigen       |
+| `GET`   | `/api/v1/exports/cost-records`      | Kostendaten exportieren   |
+| `POST`  | `/api/v1/documents`                 | Dokument hochladen        |
 
 ---
 
@@ -213,16 +219,16 @@ curl http://localhost:3001/anomalies \
 
 Cost Watchdog führt 8 verschiedene Anomalie-Checks durch:
 
-| Check | Beschreibung | Schwellwert |
-|-------|--------------|-------------|
-| **YoY Deviation** | Vergleich zum Vorjahresmonat | ±15% |
-| **MoM Deviation** | Vergleich zum Vormonat | ±25% |
-| **Price Spike** | Preis pro Einheit | ±20% |
-| **Statistical Outlier** | Z-Score Analyse | >2.5σ |
-| **Seasonal Anomaly** | Saisonale Abweichung | ±30% |
-| **Budget Exceeded** | Budgetüberschreitung | >100% |
-| **Duplicate Detection** | Doppelte Rechnungen | Exact Match |
-| **Missing Period** | Fehlende Abrechnungsperiode | Gap Detection |
+| Check                   | Beschreibung                 | Schwellwert   |
+| ----------------------- | ---------------------------- | ------------- |
+| **YoY Deviation**       | Vergleich zum Vorjahresmonat | ±15%          |
+| **MoM Deviation**       | Vergleich zum Vormonat       | ±25%          |
+| **Price Spike**         | Preis pro Einheit            | ±20%          |
+| **Statistical Outlier** | Z-Score Analyse              | >2.5σ         |
+| **Seasonal Anomaly**    | Saisonale Abweichung         | ±30%          |
+| **Budget Exceeded**     | Budgetüberschreitung         | >100%         |
+| **Duplicate Detection** | Doppelte Rechnungen          | Exact Match   |
+| **Missing Period**      | Fehlende Abrechnungsperiode  | Gap Detection |
 
 Jede Anomalie erhält einen Schweregrad: `info`, `warning`, oder `critical`.
 
@@ -238,7 +244,7 @@ docker build -t cost-watchdog-api -f apps/api/Dockerfile .
 docker build -t cost-watchdog-web --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/api/v1 -f apps/web/Dockerfile .
 
 # Mit Docker Compose
-docker-compose -f infrastructure/docker-compose.yml up -d
+docker compose -f infrastructure/docker-compose.yml up -d
 ```
 
 ### Database Migrations
@@ -261,7 +267,7 @@ REDIS_URL=redis://localhost:6379
 
 # Auth
 AUTH_SECRET=your-secret-here-min-32-chars-long
-AUTH_URL=http://localhost:3000
+INITIAL_ADMIN_EMAIL=admin@example.com
 
 # S3/MinIO
 S3_ENDPOINT=http://localhost:9000
@@ -270,11 +276,10 @@ S3_SECRET_KEY=minioadmin
 S3_BUCKET=documents
 
 # App
-API_URL=http://localhost:3001
 WEB_URL=http://localhost:3000
 
 # Optional: LLM für PDF-Extraktion
-OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ---
@@ -282,8 +287,8 @@ OPENAI_API_KEY=sk-...
 ## Tests
 
 ```bash
-# Alle Tests
-pnpm test
+# Integration Tests (Postgres + Redis via Docker)
+pnpm test:integration
 
 # Mit Coverage
 pnpm test -- --coverage
@@ -292,56 +297,54 @@ pnpm test -- --coverage
 pnpm --filter @cost-watchdog/api test anomalies.test.ts
 ```
 
-**Test-Status:** 569 Tests passing (33 Test-Dateien)
-
 ---
 
 ## Security
 
-Cost Watchdog ist enterprise-ready mit umfassenden Sicherheitsmaßnahmen.
+Cost Watchdog hat security-focused Defaults, aber keine formale Compliance-Zertifizierung.
 
 > **[Vollständige Security-Dokumentation](docs/SECURITY.md)**
 
 ### Authentication & Access Control
 
-| Feature | Beschreibung |
-|---------|--------------|
+| Feature                  | Beschreibung                                             |
+| ------------------------ | -------------------------------------------------------- |
 | **JWT + Refresh Tokens** | Kurzlebige Access Tokens (15min), sichere Token-Rotation |
-| **HttpOnly Cookies** | Tokens sicher gespeichert, kein JavaScript-Zugriff |
-| **Role-Based Access** | 5 Rollen: Admin, Manager, Analyst, Viewer, Auditor |
-| **Account Lockout** | Schutz gegen Brute-Force (5 Versuche → 15min Sperre) |
-| **Strong Passwords** | Min. 12 Zeichen, Komplexitätsregeln, Breach-Detection |
-| **MFA (TOTP)** | 2-Faktor-Authentifizierung mit Google Authenticator etc. |
+| **HttpOnly Cookies**     | Tokens sicher gespeichert, kein JavaScript-Zugriff       |
+| **Role-Based Access**    | 5 Rollen: Admin, Manager, Analyst, Viewer, Auditor       |
+| **Account Lockout**      | Schutz gegen Brute-Force (5 Versuche → 15min Sperre)     |
+| **Strong Passwords**     | Min. 12 Zeichen, Komplexitätsregeln, Breach-Detection    |
+| **MFA (TOTP)**           | 2-Faktor-Authentifizierung mit Google Authenticator etc. |
 
 ### API & Data Security
 
-| Feature | Beschreibung |
-|---------|--------------|
-| **API Key Scopes** | Granulare Berechtigungen: read, write, delete, admin |
-| **CSRF Protection** | Double-Submit Cookie Pattern |
-| **Rate Limiting** | Redis-basiert mit Sliding Window |
-| **Field Encryption** | AES-256-GCM für sensible Daten (Rechnungsnummern etc.) |
-| **Secure Logging** | Automatische Redaction von Passwörtern, Tokens, E-Mails |
-| **Input Validation** | Zod Schemas, XSS-Prevention, SQL-Injection-Schutz |
+| Feature              | Beschreibung                                            |
+| -------------------- | ------------------------------------------------------- |
+| **API Key Scopes**   | Granulare Berechtigungen: read, write, delete, admin    |
+| **CSRF Protection**  | Double-Submit Cookie Pattern                            |
+| **Rate Limiting**    | Redis-basiert mit Sliding Window                        |
+| **Field Encryption** | AES-256-GCM für sensible Daten (Rechnungsnummern etc.)  |
+| **Secure Logging**   | Automatische Redaction von Passwörtern, Tokens, E-Mails |
+| **Input Validation** | Zod Schemas, XSS-Prevention, SQL-Injection-Schutz       |
 
 ### Compliance & Audit
 
-| Feature | Beschreibung |
-|---------|--------------|
-| **Audit Logging** | Vollständiger Trail aller sicherheitsrelevanten Aktionen |
-| **GDPR Compliance** | Datenexport, Right to Erasure, Anonymisierung |
-| **Data Retention** | Automatische Bereinigung nach konfigurierbaren Zeiträumen |
-| **Session Management** | Aktive Sessions einsehen und widerrufen |
+| Feature                | Beschreibung                                              |
+| ---------------------- | --------------------------------------------------------- |
+| **Audit Logging**      | Vollständiger Trail aller sicherheitsrelevanten Aktionen  |
+| **GDPR Compliance**    | Datenexport, Right to Erasure, Anonymisierung             |
+| **Data Retention**     | Automatische Bereinigung nach konfigurierbaren Zeiträumen |
+| **Session Management** | Aktive Sessions einsehen und widerrufen                   |
 
 ### Infrastructure
 
-| Feature | Beschreibung |
-|---------|--------------|
-| **Docker Secrets** | Sensitive Konfiguration via Secrets statt Environment-Variablen |
-| **TLS/HTTPS** | Traefik Reverse Proxy mit Let's Encrypt Zertifikaten |
-| **Non-Root Container** | Container laufen als unprivilegierte User |
-| **CVE Scanning** | Trivy, TruffleHog, npm audit in CI/CD |
-| **Security Headers** | Helmet.js mit CSP, HSTS, X-Frame-Options etc. |
+| Feature                | Beschreibung                                                    |
+| ---------------------- | --------------------------------------------------------------- |
+| **Docker Secrets**     | Sensitive Konfiguration via Secrets statt Environment-Variablen |
+| **TLS/HTTPS**          | Traefik Reverse Proxy mit Let's Encrypt Zertifikaten            |
+| **Non-Root Container** | Container laufen als unprivilegierte User                       |
+| **CVE Scanning**       | Trivy, TruffleHog, npm audit in CI/CD                           |
+| **Security Headers**   | Helmet.js mit CSP, HSTS, X-Frame-Options etc.                   |
 
 ---
 
@@ -357,13 +360,13 @@ Cost Watchdog ist enterprise-ready mit umfassenden Sicherheitsmaßnahmen.
 
 ## Contributing
 
-Dieses Repository ist proprietär. Für Anfragen kontaktieren Sie bitte das Entwicklungsteam.
+Contributions are welcome. See `CONTRIBUTING.md`.
 
 ---
 
 ## License
 
-**Proprietary** - Alle Rechte vorbehalten.
+MIT. See `LICENSE`.
 
 ---
 

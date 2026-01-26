@@ -40,13 +40,15 @@ export const budgetExceededCheck: AnomalyCheck = {
     const recordMonth = record.periodStart.getMonth();
     const recordYear = record.periodStart.getFullYear();
 
-    const monthlyTotal = context.historicalRecords
-      .filter(r =>
-        r.costType === record.costType &&
-        r.periodStart.getMonth() === recordMonth &&
-        r.periodStart.getFullYear() === recordYear
-      )
-      .reduce((sum, r) => sum + r.amount, 0) + record.amount;
+    const monthlyTotal =
+      context.historicalRecords
+        .filter(
+          (r) =>
+            r.costType === record.costType &&
+            r.periodStart.getMonth() === recordMonth &&
+            r.periodStart.getFullYear() === recordYear,
+        )
+        .reduce((sum, r) => sum + r.amount, 0) + record.amount;
 
     // Calculate how much over budget
     const overBudget = monthlyTotal - budgetAmount;

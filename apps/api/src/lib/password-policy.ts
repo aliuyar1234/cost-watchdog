@@ -25,7 +25,8 @@ export const PASSWORD_MAX_LENGTH = 128;
 const UPPERCASE_REGEX = /[A-Z]/;
 const LOWERCASE_REGEX = /[a-z]/;
 const NUMBER_REGEX = /[0-9]/;
-const SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/;
+// Any non-alphanumeric character counts as "special" for this policy.
+const SPECIAL_CHAR_REGEX = /[^A-Za-z0-9]/;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ZOD SCHEMA

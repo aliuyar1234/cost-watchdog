@@ -57,12 +57,14 @@ export const notificationSettingsRoutes: FastifyPluginAsync = async (fastify) =>
       const current = resolveUserNotificationSettings(record?.notificationSettings);
 
       const updated = {
-        emailAlertsEnabled: typeof payload.emailAlertsEnabled === 'boolean'
-          ? payload.emailAlertsEnabled
-          : current.emailAlertsEnabled,
-        dailyDigestEnabled: typeof payload.dailyDigestEnabled === 'boolean'
-          ? payload.dailyDigestEnabled
-          : current.dailyDigestEnabled,
+        emailAlertsEnabled:
+          typeof payload.emailAlertsEnabled === 'boolean'
+            ? payload.emailAlertsEnabled
+            : current.emailAlertsEnabled,
+        dailyDigestEnabled:
+          typeof payload.dailyDigestEnabled === 'boolean'
+            ? payload.dailyDigestEnabled
+            : current.dailyDigestEnabled,
       };
 
       await prisma.user.update({
@@ -71,7 +73,7 @@ export const notificationSettingsRoutes: FastifyPluginAsync = async (fastify) =>
       });
 
       return reply.send({ success: true, settings: updated });
-    }
+    },
   );
 };
 

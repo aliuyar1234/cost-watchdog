@@ -77,29 +77,34 @@ const DEFAULT_RETENTION_CONFIG: RetentionConfig = {
 export function getRetentionConfig(): RetentionConfig {
   return {
     outboxEventRetentionDays: parseInt(
-      process.env['RETENTION_OUTBOX_DAYS'] || String(DEFAULT_RETENTION_CONFIG.outboxEventRetentionDays),
-      10
+      process.env['RETENTION_OUTBOX_DAYS'] ||
+        String(DEFAULT_RETENTION_CONFIG.outboxEventRetentionDays),
+      10,
     ),
     dailyDigestRetentionDays: parseInt(
-      process.env['RETENTION_DAILY_DIGEST_DAYS'] || String(DEFAULT_RETENTION_CONFIG.dailyDigestRetentionDays),
-      10
+      process.env['RETENTION_DAILY_DIGEST_DAYS'] ||
+        String(DEFAULT_RETENTION_CONFIG.dailyDigestRetentionDays),
+      10,
     ),
     loginAttemptRetentionDays: parseInt(
-      process.env['RETENTION_LOGIN_ATTEMPT_DAYS'] || String(DEFAULT_RETENTION_CONFIG.loginAttemptRetentionDays),
-      10
+      process.env['RETENTION_LOGIN_ATTEMPT_DAYS'] ||
+        String(DEFAULT_RETENTION_CONFIG.loginAttemptRetentionDays),
+      10,
     ),
     passwordResetTokenRetentionDays: parseInt(
-      process.env['RETENTION_PASSWORD_RESET_DAYS'] || String(DEFAULT_RETENTION_CONFIG.passwordResetTokenRetentionDays),
-      10
+      process.env['RETENTION_PASSWORD_RESET_DAYS'] ||
+        String(DEFAULT_RETENTION_CONFIG.passwordResetTokenRetentionDays),
+      10,
     ),
     auditLogRetentionDays: parseInt(
-      process.env['RETENTION_AUDIT_LOG_DAYS'] || String(DEFAULT_RETENTION_CONFIG.auditLogRetentionDays),
-      10
+      process.env['RETENTION_AUDIT_LOG_DAYS'] ||
+        String(DEFAULT_RETENTION_CONFIG.auditLogRetentionDays),
+      10,
     ),
     archiveAuditLogs: process.env['RETENTION_ARCHIVE_AUDIT_LOGS'] === 'true',
     batchSize: parseInt(
       process.env['RETENTION_BATCH_SIZE'] || String(DEFAULT_RETENTION_CONFIG.batchSize),
-      10
+      10,
     ),
   };
 }
@@ -172,7 +177,7 @@ export async function cleanupTokenBlacklist(): Promise<CleanupResult> {
  */
 export async function cleanupOutboxEvents(
   retentionDays: number = DEFAULT_RETENTION_CONFIG.outboxEventRetentionDays,
-  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize
+  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize,
 ): Promise<CleanupResult> {
   const startTime = Date.now();
   let totalDeleted = 0;
@@ -221,7 +226,7 @@ export async function cleanupOutboxEvents(
  */
 export async function cleanupOutboxEventsBatched(
   retentionDays: number = DEFAULT_RETENTION_CONFIG.outboxEventRetentionDays,
-  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize
+  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize,
 ): Promise<CleanupResult> {
   const startTime = Date.now();
   let totalDeleted = 0;
@@ -283,7 +288,7 @@ export async function cleanupOutboxEventsBatched(
  */
 export async function cleanupDailyDigests(
   retentionDays: number = DEFAULT_RETENTION_CONFIG.dailyDigestRetentionDays,
-  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize
+  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize,
 ): Promise<CleanupResult> {
   const startTime = Date.now();
   let totalDeleted = 0;
@@ -340,7 +345,7 @@ export async function cleanupDailyDigests(
  */
 export async function cleanupLoginAttempts(
   retentionDays: number = DEFAULT_RETENTION_CONFIG.loginAttemptRetentionDays,
-  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize
+  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize,
 ): Promise<CleanupResult> {
   const startTime = Date.now();
   let totalDeleted = 0;
@@ -402,7 +407,7 @@ export async function cleanupLoginAttempts(
  */
 export async function cleanupPasswordResetTokens(
   retentionDays: number = DEFAULT_RETENTION_CONFIG.passwordResetTokenRetentionDays,
-  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize
+  batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize,
 ): Promise<CleanupResult> {
   const startTime = Date.now();
   let totalDeleted = 0;
@@ -477,7 +482,7 @@ export interface AuditLogArchiveResult extends CleanupResult {
 export async function cleanupAuditLogs(
   retentionDays: number = DEFAULT_RETENTION_CONFIG.auditLogRetentionDays,
   batchSize: number = DEFAULT_RETENTION_CONFIG.batchSize,
-  archive: boolean = false
+  archive: boolean = false,
 ): Promise<AuditLogArchiveResult> {
   const startTime = Date.now();
   let totalDeleted = 0;
@@ -531,7 +536,7 @@ export async function cleanupAuditLogs(
 
         // Log archive creation (in production, upload to S3)
         console.log(
-          `[DataRetention] Archived ${archiveData.count} audit logs from ${archiveData.dateRange.from} to ${archiveData.dateRange.to}`
+          `[DataRetention] Archived ${archiveData.count} audit logs from ${archiveData.dateRange.from} to ${archiveData.dateRange.to}`,
         );
         archivedCount += logsToProcess.length;
       }
@@ -572,7 +577,7 @@ export async function cleanupAuditLogs(
  * Run all retention cleanup tasks.
  */
 export async function runRetentionCleanup(
-  config: Partial<RetentionConfig> = {}
+  config: Partial<RetentionConfig> = {},
 ): Promise<RetentionRunResult> {
   const fullConfig = { ...getRetentionConfig(), ...config };
   const startedAt = new Date();
@@ -581,15 +586,25 @@ export async function runRetentionCleanup(
   console.log(`[DataRetention] Configuration: ${JSON.stringify(fullConfig)}`);
 
   // Run all cleanup tasks
-  const [tokenBlacklist, outboxEvents, dailyDigests, loginAttempts, passwordResetTokens, auditLogs] =
-    await Promise.all([
-      cleanupTokenBlacklist(),
-      cleanupOutboxEventsBatched(fullConfig.outboxEventRetentionDays, fullConfig.batchSize),
-      cleanupDailyDigests(fullConfig.dailyDigestRetentionDays, fullConfig.batchSize),
-      cleanupLoginAttempts(fullConfig.loginAttemptRetentionDays, fullConfig.batchSize),
-      cleanupPasswordResetTokens(fullConfig.passwordResetTokenRetentionDays, fullConfig.batchSize),
-      cleanupAuditLogs(fullConfig.auditLogRetentionDays, fullConfig.batchSize, fullConfig.archiveAuditLogs),
-    ]);
+  const [
+    tokenBlacklist,
+    outboxEvents,
+    dailyDigests,
+    loginAttempts,
+    passwordResetTokens,
+    auditLogs,
+  ] = await Promise.all([
+    cleanupTokenBlacklist(),
+    cleanupOutboxEventsBatched(fullConfig.outboxEventRetentionDays, fullConfig.batchSize),
+    cleanupDailyDigests(fullConfig.dailyDigestRetentionDays, fullConfig.batchSize),
+    cleanupLoginAttempts(fullConfig.loginAttemptRetentionDays, fullConfig.batchSize),
+    cleanupPasswordResetTokens(fullConfig.passwordResetTokenRetentionDays, fullConfig.batchSize),
+    cleanupAuditLogs(
+      fullConfig.auditLogRetentionDays,
+      fullConfig.batchSize,
+      fullConfig.archiveAuditLogs,
+    ),
+  ]);
 
   const completedAt = new Date();
   const results = {

@@ -57,7 +57,9 @@ export interface ServiceError {
 }
 
 export type UploadResult = ServiceResult<DocumentDTO> | ServiceError;
-export type DownloadResult = ServiceResult<{ downloadUrl: string; filename: string; expiresIn: number }> | ServiceError;
+export type DownloadResult =
+  | ServiceResult<{ downloadUrl: string; filename: string; expiresIn: number }>
+  | ServiceError;
 export type DeleteResult = ServiceResult<void> | ServiceError;
 export type RetryResult = ServiceResult<{ message: string }> | ServiceError;
 
@@ -80,7 +82,7 @@ export class DocumentService {
     input: UploadInput,
     userId: string,
     ctx: ServiceContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<UploadResult> {
     const { buffer, filename, mimetype } = input;
 
@@ -217,7 +219,7 @@ export class DocumentService {
     documentId: string,
     userId: string,
     ctx: ServiceContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<DownloadResult> {
     // Check access
     const accessResult = await canAccessDocument(userId, documentId);
@@ -241,7 +243,7 @@ export class DocumentService {
 
     const document = await prisma.document.findUnique({
       where: { id: documentId },
-      select: { storagePath: true, originalFilename: true },
+      select: { storagePath: true, originalFilename: true, mimeType: true },
     });
 
     if (!document) {
@@ -254,7 +256,10 @@ export class DocumentService {
     }
 
     try {
-      const downloadUrl = await getPresignedDownloadUrl(document.storagePath);
+      const downloadUrl = await getPresignedDownloadUrl(document.storagePath, {
+        filename: document.originalFilename,
+        mimeType: document.mimeType,
+      });
 
       await logAuditEvent({
         entityType: 'document',
@@ -291,7 +296,7 @@ export class DocumentService {
     documentId: string,
     userId: string,
     ctx: ServiceContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<DeleteResult> {
     // Check delete permission
     const deleteResult = await canDeleteDocument(userId, documentId);
@@ -305,7 +310,10 @@ export class DocumentService {
         ...ctx,
       }).catch((err) => logger?.error(err, 'Failed to log audit event'));
 
-      if (deleteResult.reason === 'Document not found' || deleteResult.reason === 'User not found or inactive') {
+      if (
+        deleteResult.reason === 'Document not found' ||
+        deleteResult.reason === 'User not found or inactive'
+      ) {
         return {
           success: false,
           error: 'Not Found',
@@ -379,7 +387,7 @@ export class DocumentService {
     documentId: string,
     userId: string,
     ctx: ServiceContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<RetryResult> {
     const document = await prisma.document.findUnique({
       where: { id: documentId },
@@ -448,7 +456,7 @@ export class DocumentService {
     documentId: string,
     userId: string,
     ctx: ServiceContext,
-    logger?: { error: (err: unknown, msg: string) => void }
+    logger?: { error: (err: unknown, msg: string) => void },
   ): Promise<{ allowed: boolean; reason?: string }> {
     const result = await canAccessDocument(userId, documentId);
 

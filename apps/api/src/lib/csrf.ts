@@ -43,7 +43,7 @@ export function generateSignedCsrfToken(secret: string): string {
  */
 export function parseSignedCsrfToken(
   signedToken: string,
-  secret: string
+  secret: string,
 ): { valid: boolean; expired: boolean; token?: string } {
   const parts = signedToken.split('.');
   if (parts.length !== 3) {
@@ -93,7 +93,7 @@ export function parseSignedCsrfToken(
 export function validateCsrfToken(
   cookieToken: string | undefined,
   headerToken: string | undefined,
-  secret: string
+  secret: string,
 ): { valid: boolean; reason?: string } {
   if (!cookieToken) {
     return { valid: false, reason: 'Missing CSRF cookie' };
@@ -133,7 +133,7 @@ export function validateCsrfToken(
  */
 export function validateSimpleCsrfToken(
   cookieToken: string | undefined,
-  headerToken: string | undefined
+  headerToken: string | undefined,
 ): { valid: boolean; reason?: string } {
   if (!cookieToken) {
     return { valid: false, reason: 'Missing CSRF cookie' };

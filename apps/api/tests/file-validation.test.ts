@@ -90,7 +90,7 @@ describe('File Validation Library', () => {
   describe('SVG Validation', () => {
     it('should accept valid SVG', async () => {
       const svgBuffer = Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>',
       );
       const result = await validateFileMagicBytes(svgBuffer, 'image/svg+xml');
 
@@ -99,7 +99,7 @@ describe('File Validation Library', () => {
 
     it('should reject SVG with script tag', async () => {
       const svgBuffer = Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert("xss")</script></svg>',
       );
       const result = await validateFileMagicBytes(svgBuffer, 'image/svg+xml');
 
@@ -109,7 +109,7 @@ describe('File Validation Library', () => {
 
     it('should reject SVG with onclick handler', async () => {
       const svgBuffer = Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg"><circle onclick="alert(1)"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg"><circle onclick="alert(1)"/></svg>',
       );
       const result = await validateFileMagicBytes(svgBuffer, 'image/svg+xml');
 
@@ -118,7 +118,7 @@ describe('File Validation Library', () => {
 
     it('should reject SVG with javascript URL', async () => {
       const svgBuffer = Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><text>click</text></a></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><text>click</text></a></svg>',
       );
       const result = await validateFileMagicBytes(svgBuffer, 'image/svg+xml');
 
@@ -127,7 +127,7 @@ describe('File Validation Library', () => {
 
     it('should reject SVG with foreignObject', async () => {
       const svgBuffer = Buffer.from(
-        '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><body>html</body></foreignObject></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><body>html</body></foreignObject></svg>',
       );
       const result = await validateFileMagicBytes(svgBuffer, 'image/svg+xml');
 
@@ -135,9 +135,7 @@ describe('File Validation Library', () => {
     });
 
     it('should reject non-SVG XML', async () => {
-      const xmlBuffer = Buffer.from(
-        '<?xml version="1.0"?><html><body>not svg</body></html>'
-      );
+      const xmlBuffer = Buffer.from('<?xml version="1.0"?><html><body>not svg</body></html>');
       const result = await validateFileMagicBytes(xmlBuffer, 'image/svg+xml');
 
       expect(result.valid).toBe(false);
@@ -147,9 +145,7 @@ describe('File Validation Library', () => {
 
   describe('SVG Sanitization', () => {
     it('should remove script tags', () => {
-      const svgBuffer = Buffer.from(
-        '<svg><script>alert(1)</script><circle/></svg>'
-      );
+      const svgBuffer = Buffer.from('<svg><script>alert(1)</script><circle/></svg>');
       const sanitized = sanitizeSvg(svgBuffer);
 
       expect(sanitized).not.toBeNull();
@@ -158,9 +154,7 @@ describe('File Validation Library', () => {
     });
 
     it('should remove event handlers', () => {
-      const svgBuffer = Buffer.from(
-        '<svg><circle onclick="alert(1)" r="50"/></svg>'
-      );
+      const svgBuffer = Buffer.from('<svg><circle onclick="alert(1)" r="50"/></svg>');
       const sanitized = sanitizeSvg(svgBuffer);
 
       expect(sanitized).not.toBeNull();
@@ -168,9 +162,7 @@ describe('File Validation Library', () => {
     });
 
     it('should remove javascript URLs', () => {
-      const svgBuffer = Buffer.from(
-        '<svg><a href="javascript:alert(1)">link</a></svg>'
-      );
+      const svgBuffer = Buffer.from('<svg><a href="javascript:alert(1)">link</a></svg>');
       const sanitized = sanitizeSvg(svgBuffer);
 
       expect(sanitized).not.toBeNull();
@@ -246,7 +238,7 @@ describe('File Validation Library', () => {
     it('should accept xlsx for spreadsheet MIME type', () => {
       const result = validateFilenameExtension(
         'spreadsheet.xlsx',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       expect(result.valid).toBe(true);
     });
@@ -320,7 +312,7 @@ describe('File Validation Library', () => {
       const result = await validateFile(csvBuffer, 'data.txt', 'text/csv');
 
       expect(result.valid).toBe(false);
-      expect(result.errors.some(e => e.includes('extension'))).toBe(true);
+      expect(result.errors.some((e) => e.includes('extension'))).toBe(true);
     });
   });
 
@@ -332,7 +324,9 @@ describe('File Validation Library', () => {
     });
 
     it('should have XLSX configured', () => {
-      expect(ALLOWED_FILE_TYPES['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']).toBeDefined();
+      expect(
+        ALLOWED_FILE_TYPES['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+      ).toBeDefined();
     });
 
     it('should have CSV configured without magic bytes', () => {

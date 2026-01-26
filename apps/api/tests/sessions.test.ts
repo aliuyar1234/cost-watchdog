@@ -36,7 +36,8 @@ describe('Sessions Service', () => {
 
   describe('parseUserAgent', () => {
     it('should parse Chrome on Windows', () => {
-      const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+      const ua =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
       const result = parseUserAgent(ua);
 
       expect(result.browser).toBe('Chrome');
@@ -45,7 +46,8 @@ describe('Sessions Service', () => {
     });
 
     it('should parse Safari on iOS', () => {
-      const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+      const ua =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
       const result = parseUserAgent(ua);
 
       expect(result.browser).toBe('Mobile Safari');
@@ -91,7 +93,7 @@ describe('Sessions Service', () => {
         testSessionId,
         testUserId,
         '192.168.1.1',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0'
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0',
       );
 
       expect(session.sessionId).toBe(testSessionId);
@@ -160,8 +162,8 @@ describe('Sessions Service', () => {
 
       const sessions = await listUserSessions(testUserId, testSessionId);
 
-      const currentSession = sessions.find(s => s.sessionId === testSessionId);
-      const otherSession = sessions.find(s => s.sessionId === testSessionId2);
+      const currentSession = sessions.find((s) => s.sessionId === testSessionId);
+      const otherSession = sessions.find((s) => s.sessionId === testSessionId2);
 
       expect(currentSession?.current).toBe(true);
       expect(otherSession?.current).toBe(false);
@@ -176,7 +178,7 @@ describe('Sessions Service', () => {
       await createSession(testSessionId, testUserId, '192.168.1.1', 'Agent 1');
 
       // Wait a bit and create second session
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       await createSession(testSessionId2, testUserId, '192.168.1.2', 'Agent 2');
 
       const sessions = await listUserSessions(testUserId);
@@ -206,12 +208,12 @@ describe('Sessions Service', () => {
       await createSession(testSessionId, testUserId, '192.168.1.1', 'Agent');
 
       const before = await getSession(testSessionId);
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       await updateSessionActivity(testSessionId);
       const after = await getSession(testSessionId);
 
       expect(new Date(after!.lastActivity).getTime()).toBeGreaterThan(
-        new Date(before!.lastActivity).getTime()
+        new Date(before!.lastActivity).getTime(),
       );
     });
 

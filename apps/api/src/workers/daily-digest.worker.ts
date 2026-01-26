@@ -31,9 +31,12 @@ const DEFAULT_CONFIG: Required<DailyDigestWorkerConfig> = {
 };
 
 const RECIPIENT_CACHE_TTL_MS = 60 * 1000;
-let cachedRecipients:
-  | Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>
-  | null = null;
+let cachedRecipients: Array<{
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+}> | null = null;
 let cachedRecipientsAt = 0;
 
 interface DigestSummary {
@@ -57,7 +60,11 @@ function formatDigestDate(date: Date): string {
   });
 }
 
-function getRecipientName(firstName: string | null, lastName: string | null, email: string): string {
+function getRecipientName(
+  firstName: string | null,
+  lastName: string | null,
+  email: string,
+): string {
   if (firstName && firstName.trim()) {
     return firstName.trim();
   }
@@ -83,7 +90,13 @@ async function loadEmailRecipients(): Promise<
   Array<{ id: string; email: string; firstName: string | null; lastName: string | null }>
 > {
   const now = Date.now();
-  if (cachedRecipients && now - cachedRecipientsAt < RECIPIENT_CACHE_TTL_MS) {
+  const isTestEnv = process.env['NODE_ENV'] === 'test';
+  if (
+    !isTestEnv &&
+    cachedRecipients &&
+    now >= cachedRecipientsAt &&
+    now - cachedRecipientsAt < RECIPIENT_CACHE_TTL_MS
+  ) {
     return cachedRecipients;
   }
 
@@ -107,20 +120,25 @@ async function loadEmailRecipients(): Promise<
     return settings.dailyDigestEnabled;
   });
 
-  cachedRecipients = filtered.map((user) => ({
+  const mapped = filtered.map((user) => ({
     id: user.id,
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
   }));
-  cachedRecipientsAt = now;
-  return cachedRecipients;
+
+  if (!isTestEnv) {
+    cachedRecipients = mapped;
+    cachedRecipientsAt = now;
+  }
+
+  return mapped;
 }
 
 async function buildDigestSummary(
   windowStart: Date,
   windowEnd: Date,
-  enabledSeverities: string[]
+  enabledSeverities: string[],
 ): Promise<DigestSummary> {
   if (enabledSeverities.length === 0) {
     return {
@@ -197,6 +215,45 @@ async function claimDigestRecord(params: {
   windowEnd: Date;
   maxAttempts: number;
 }): Promise<{ id: string } | null> {
+  const now = new Date();
+  const leaseMs = 10 * 60 * 1000;
+  const staleBefore = new Date(now.getTime() - leaseMs);
+
+  const claimResult = await prisma.dailyDigest.updateMany({
+    where: {
+      digestKey: params.digestKey,
+      channel: params.channel,
+      recipient: params.recipient,
+      attempts: { lt: params.maxAttempts },
+      OR: [
+        { status: { in: ['pending', 'failed'] } },
+        { status: 'processing', lastAttemptAt: { lt: staleBefore } },
+      ],
+    },
+    data: {
+      status: 'processing',
+      attempts: { increment: 1 },
+      lastAttemptAt: now,
+      windowStart: params.windowStart,
+      windowEnd: params.windowEnd,
+      errorMessage: null,
+      userId: params.userId ?? null,
+    },
+  });
+
+  if (claimResult.count === 1) {
+    return prisma.dailyDigest.findUnique({
+      where: {
+        digestKey_channel_recipient: {
+          digestKey: params.digestKey,
+          channel: params.channel,
+          recipient: params.recipient,
+        },
+      },
+      select: { id: true },
+    });
+  }
+
   const existing = await prisma.dailyDigest.findUnique({
     where: {
       digestKey_channel_recipient: {
@@ -205,49 +262,39 @@ async function claimDigestRecord(params: {
         recipient: params.recipient,
       },
     },
+    select: { id: true, status: true, attempts: true, lastAttemptAt: true },
   });
 
-  if (existing?.status === 'sent') {
+  if (existing) {
     return null;
   }
 
-  if (existing && existing.attempts >= params.maxAttempts) {
-    return null;
-  }
-
-  const now = new Date();
-
-  const record = await prisma.dailyDigest.upsert({
-    where: {
-      digestKey_channel_recipient: {
+  try {
+    return await prisma.dailyDigest.create({
+      data: {
         digestKey: params.digestKey,
         channel: params.channel,
         recipient: params.recipient,
+        userId: params.userId ?? null,
+        windowStart: params.windowStart,
+        windowEnd: params.windowEnd,
+        status: 'processing',
+        attempts: 1,
+        lastAttemptAt: now,
       },
-    },
-    create: {
-      digestKey: params.digestKey,
-      channel: params.channel,
-      recipient: params.recipient,
-      userId: params.userId,
-      windowStart: params.windowStart,
-      windowEnd: params.windowEnd,
-      status: 'pending',
-      attempts: 1,
-      lastAttemptAt: now,
-    },
-    update: {
-      status: 'pending',
-      attempts: { increment: 1 },
-      lastAttemptAt: now,
-      windowStart: params.windowStart,
-      windowEnd: params.windowEnd,
-      errorMessage: null,
-    },
-    select: { id: true },
-  });
-
-  return record;
+      select: { id: true },
+    });
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002'
+    ) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function markDigestSent(id: string): Promise<void> {
@@ -323,7 +370,10 @@ export class DailyDigestWorker {
 
       const digestTime = parseDailyDigestTime(settings.dailyDigestTime);
       if (!digestTime) {
-        console.warn('[DailyDigestWorker] Invalid dailyDigestTime setting:', settings.dailyDigestTime);
+        console.warn(
+          '[DailyDigestWorker] Invalid dailyDigestTime setting:',
+          settings.dailyDigestTime,
+        );
         return;
       }
 
@@ -362,7 +412,11 @@ export class DailyDigestWorker {
     const slackWebhookUrl = params.settings.slackWebhookUrl.trim();
     const teamsWebhookUrl = params.settings.teamsWebhookUrl.trim();
 
-    if (!params.settings.emailEnabled && !params.settings.slackEnabled && !params.settings.teamsEnabled) {
+    if (
+      !params.settings.emailEnabled &&
+      !params.settings.slackEnabled &&
+      !params.settings.teamsEnabled
+    ) {
       console.log('[DailyDigestWorker] No alert channels enabled, skipping digest');
       return;
     }
@@ -391,7 +445,11 @@ export class DailyDigestWorker {
 
           const result = await sendDailyDigestEmail({
             recipientEmail: recipient.email,
-            recipientName: getRecipientName(recipient.firstName, recipient.lastName, recipient.email),
+            recipientName: getRecipientName(
+              recipient.firstName,
+              recipient.lastName,
+              recipient.email,
+            ),
             ...params.summary,
             dashboardUrl: DASHBOARD_URL,
           });

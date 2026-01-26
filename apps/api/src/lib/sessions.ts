@@ -6,7 +6,6 @@
  */
 
 import { redis, blacklistToken } from './redis.js';
-import { createHash } from 'crypto';
 import UAParser from 'ua-parser-js';
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -23,6 +22,7 @@ const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 // Access token TTL for blacklisting
 const ACCESS_TOKEN_TTL = 15 * 60;
 const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60;
+const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -120,7 +120,7 @@ export async function createSession(
   sessionId: string,
   userId: string,
   ipAddress: string,
-  userAgent: string | null | undefined
+  userAgent: string | null | undefined,
 ): Promise<SessionMetadata> {
   const parsed = parseUserAgent(userAgent);
   const now = new Date().toISOString();
@@ -193,7 +193,7 @@ export async function getSession(sessionId: string): Promise<SessionMetadata | n
  */
 export async function listUserSessions(
   userId: string,
-  currentSessionId?: string
+  currentSessionId?: string,
 ): Promise<SessionMetadata[]> {
   const userSessionsKey = getUserSessionsKey(userId);
   const sessionIds = await redis.smembers(userSessionsKey);
@@ -205,15 +205,25 @@ export async function listUserSessions(
   const sessions: SessionMetadata[] = [];
   const expiredSessionIds: string[] = [];
 
-  for (const sessionId of sessionIds) {
-    const session = await getSession(sessionId);
-    if (session) {
+  const sessionKeys = sessionIds.map(getSessionKey);
+  const sessionDataList = await redis.mget(...sessionKeys);
+
+  for (let i = 0; i < sessionIds.length; i++) {
+    const sessionId = sessionIds[i]!;
+    const sessionData = sessionDataList[i];
+
+    if (!sessionData) {
+      expiredSessionIds.push(sessionId);
+      continue;
+    }
+
+    try {
+      const session = JSON.parse(sessionData) as SessionMetadata;
       sessions.push({
         ...session,
         current: sessionId === currentSessionId,
       });
-    } else {
-      // Session expired but still in set - clean up
+    } catch {
       expiredSessionIds.push(sessionId);
     }
   }
@@ -224,9 +234,7 @@ export async function listUserSessions(
   }
 
   // Sort by lastActivity descending (most recent first)
-  sessions.sort((a, b) =>
-    new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
-  );
+  sessions.sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 
   return sessions;
 }
@@ -239,7 +247,7 @@ export async function terminateSession(
   sessionId: string,
   userId: string,
   accessToken?: string,
-  refreshToken?: string
+  refreshToken?: string,
 ): Promise<boolean> {
   const sessionKey = getSessionKey(sessionId);
   const userSessionsKey = getUserSessionsKey(userId);
@@ -284,7 +292,7 @@ export async function terminateAllSessions(userId: string): Promise<number> {
   }
 
   // Delete all session data
-  const sessionKeys = sessionIds.map(id => getSessionKey(id));
+  const sessionKeys = sessionIds.map((id) => getSessionKey(id));
   await redis.del(...sessionKeys);
 
   // Blacklist all session JTIs
@@ -306,8 +314,17 @@ export async function terminateAllSessions(userId: string): Promise<number> {
  */
 export async function isSessionBlacklisted(sessionId: string): Promise<boolean> {
   const sessionJtiKey = `token_blacklist:jti:${sessionId}`;
-  const result = await redis.exists(sessionJtiKey);
-  return result === 1;
+  try {
+    const result = await redis.exists(sessionJtiKey);
+    return result === 1;
+  } catch (error) {
+    console.error('[Session] Failed to check session blacklist:', error);
+    // Fail closed in production
+    if (IS_PRODUCTION) {
+      return true;
+    }
+    return false;
+  }
 }
 
 /**

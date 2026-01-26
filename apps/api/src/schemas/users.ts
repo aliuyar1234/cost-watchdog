@@ -5,7 +5,13 @@
  */
 
 import { z } from 'zod';
-import { emailSchema, paginationSchema, uuidSchema, sanitizedString, userRoleSchema } from './common.js';
+import {
+  emailSchema,
+  paginationSchema,
+  uuidSchema,
+  sanitizedString,
+  userRoleSchema,
+} from './common.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PASSWORD REQUIREMENTS
@@ -14,7 +20,8 @@ import { emailSchema, paginationSchema, uuidSchema, sanitizedString, userRoleSch
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_LENGTH = 128;
 
-export const passwordSchema = z.string()
+export const passwordSchema = z
+  .string()
   .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
   .max(PASSWORD_MAX_LENGTH, `Password must be at most ${PASSWORD_MAX_LENGTH} characters`)
   .refine((password) => /[A-Z]/.test(password), {
@@ -26,7 +33,7 @@ export const passwordSchema = z.string()
   .refine((password) => /[0-9]/.test(password), {
     message: 'Password must contain at least one number (0-9)',
   })
-  .refine((password) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password), {
+  .refine((password) => /[!"#$%&'()*+,\-./:;<=>?@[\\\]]^_`{|}~]/.test(password), {
     message: 'Password must contain at least one special character (!@#$%^&*...)',
   });
 
@@ -38,7 +45,9 @@ export const listUsersSchema = paginationSchema.extend({
   role: userRoleSchema.optional(),
   isActive: z.coerce.boolean().optional(),
   search: sanitizedString(0, 100).optional(),
-  sortBy: z.enum(['email', 'firstName', 'lastName', 'createdAt', 'lastLoginAt']).default('createdAt'),
+  sortBy: z
+    .enum(['email', 'firstName', 'lastName', 'createdAt', 'lastLoginAt'])
+    .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
@@ -91,17 +100,20 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 // CHANGE PASSWORD
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: passwordSchema,
-  confirmPassword: z.string().min(1, 'Confirm password is required'),
-}).refine(
-  (data) => data.newPassword === data.confirmPassword,
-  { message: 'Passwords do not match', path: ['confirmPassword'] }
-).refine(
-  (data) => data.currentPassword !== data.newPassword,
-  { message: 'New password must be different from current password', path: ['newPassword'] }
-);
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required'),
+    newPassword: passwordSchema,
+    confirmPassword: z.string().min(1, 'Confirm password is required'),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'New password must be different from current password',
+    path: ['newPassword'],
+  });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 

@@ -43,10 +43,11 @@ export const missingPeriodCheck: AnomalyCheck = {
   async check(record: CostRecordToCheck, context: CheckContext): Promise<CheckResult> {
     // Get records of the same cost type and supplier
     const sameTypeRecords = context.historicalRecords
-      .filter(r =>
-        r.costType === record.costType &&
-        r.supplierId === record.supplierId &&
-        r.periodEnd.getTime() < record.periodStart.getTime()
+      .filter(
+        (r) =>
+          r.costType === record.costType &&
+          r.supplierId === record.supplierId &&
+          r.periodEnd.getTime() < record.periodStart.getTime(),
       )
       .sort((a, b) => b.periodEnd.getTime() - a.periodEnd.getTime());
 

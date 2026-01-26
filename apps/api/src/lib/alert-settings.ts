@@ -61,9 +61,10 @@ export async function loadAlertSettings(): Promise<AlertSettings> {
 
   const normalized = {
     ...merged,
-    maxAlertsPerDay: typeof merged.maxAlertsPerDay === 'number' && merged.maxAlertsPerDay > 0
-      ? merged.maxAlertsPerDay
-      : DEFAULT_ALERT_SETTINGS.maxAlertsPerDay,
+    maxAlertsPerDay:
+      typeof merged.maxAlertsPerDay === 'number' && merged.maxAlertsPerDay > 0
+        ? merged.maxAlertsPerDay
+        : DEFAULT_ALERT_SETTINGS.maxAlertsPerDay,
   };
 
   cachedAlertSettings = normalized;

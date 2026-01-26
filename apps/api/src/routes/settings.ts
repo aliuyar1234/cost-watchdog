@@ -61,27 +61,25 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /settings
    */
-  fastify.get(
-    '/',
-    async (request, reply) => {
-      const user = request.user!;
+  fastify.get('/', async (request, reply) => {
+    const user = request.user!;
 
-      if (!requireAdmin(user.role)) {
-        return sendForbidden(reply, 'Admin access required');
-      }
+    if (!requireAdmin(user.role)) {
+      return sendForbidden(reply, 'Admin access required');
+    }
 
-      const record = await prisma.appSettings.findFirst();
-      const settings = normalizeSettings(record?.settings);
+    const record = await prisma.appSettings.findFirst();
+    const settings = normalizeSettings(record?.settings);
 
-      return reply.send({
-        alerts: settings['alerts'] ?? null,
-        thresholds: settings['thresholds'] ?? null,
-        general: typeof settings['timezone'] === 'string' && settings['timezone'].trim()
+    return reply.send({
+      alerts: settings['alerts'] ?? null,
+      thresholds: settings['thresholds'] ?? null,
+      general:
+        typeof settings['timezone'] === 'string' && settings['timezone'].trim()
           ? { timezone: settings['timezone'] }
           : null,
-      });
-    }
-  );
+    });
+  });
 
   /**
    * PUT /settings/alerts
@@ -175,7 +173,7 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
       const updatedSettings = normalizeSettings(record.settings);
 
       return reply.send({ success: true, alerts: updatedSettings['alerts'] ?? alerts });
-    }
+    },
   );
 
   /**
@@ -239,7 +237,7 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
       const updatedSettings = normalizeSettings(record.settings);
 
       return reply.send({ success: true, thresholds: updatedSettings['thresholds'] ?? thresholds });
-    }
+    },
   );
 
   /**
@@ -299,7 +297,7 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         general: { timezone: updatedSettings['timezone'] ?? timezone },
       });
-    }
+    },
   );
 
   /**
@@ -334,9 +332,8 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         return sendForbidden(reply, 'Admin access required');
       }
 
-      const webhookUrl = typeof request.body?.webhookUrl === 'string'
-        ? request.body.webhookUrl.trim()
-        : '';
+      const webhookUrl =
+        typeof request.body?.webhookUrl === 'string' ? request.body.webhookUrl.trim() : '';
 
       if (!webhookUrl) {
         return sendBadRequest(reply, 'Webhook URL is required');
@@ -358,7 +355,7 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         message: 'Slack webhook test successful',
       });
-    }
+    },
   );
 
   /**
@@ -393,9 +390,8 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         return sendForbidden(reply, 'Admin access required');
       }
 
-      const webhookUrl = typeof request.body?.webhookUrl === 'string'
-        ? request.body.webhookUrl.trim()
-        : '';
+      const webhookUrl =
+        typeof request.body?.webhookUrl === 'string' ? request.body.webhookUrl.trim() : '';
 
       if (!webhookUrl) {
         return sendBadRequest(reply, 'Webhook URL is required');
@@ -417,7 +413,7 @@ export const settingsRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         message: 'Teams webhook test successful',
       });
-    }
+    },
   );
 };
 

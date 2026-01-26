@@ -1,6 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  transpilePackages: ['@cost-watchdog/core', '@cost-watchdog/ui'],
-};
+const nextConfig = {};
 
 module.exports = nextConfig;

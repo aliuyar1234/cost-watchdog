@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { secrets } from './secrets.js';
+import { sanitizeString, sanitizeUrl } from './sanitize.js';
 
 /**
  * Email service for sending alerts and notifications.
@@ -8,9 +9,7 @@ import { secrets } from './secrets.js';
 
 // Initialize Resend client
 const RESEND_API_KEY = secrets.getResendApiKey();
-const resend = RESEND_API_KEY
-  ? new Resend(RESEND_API_KEY)
-  : null;
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
 /**
  * Email configuration
@@ -113,6 +112,22 @@ function getSeverityLabel(severity: string): string {
 function generateAnomalyAlertHtml(data: AnomalyAlertEmailData): string {
   const severityColor = getSeverityColor(data.severity);
   const severityLabel = getSeverityLabel(data.severity);
+  const safeRecipientName = sanitizeString(data.recipientName);
+  const safeMessage = sanitizeString(data.message);
+  const safeSupplierName = sanitizeString(data.supplierName);
+  const safeLocationName = sanitizeString(data.locationName);
+  const safeCostType = sanitizeString(data.costType);
+  const safePeriodStart = sanitizeString(data.periodStart);
+  const safePeriodEnd = sanitizeString(data.periodEnd);
+  const dashboardUrl = sanitizeUrl(data.dashboardUrl);
+  const anomalyUrl = dashboardUrl
+    ? sanitizeUrl(
+        `${dashboardUrl.replace(/\/$/, '')}/anomalies/${encodeURIComponent(data.anomalyId)}`,
+      )
+    : '';
+  const notificationsUrl = dashboardUrl
+    ? sanitizeUrl(`${dashboardUrl.replace(/\/$/, '')}/settings/notifications`)
+    : '';
 
   return `
 <!DOCTYPE html>
@@ -124,12 +139,12 @@ function generateAnomalyAlertHtml(data: AnomalyAlertEmailData): string {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">🔍 Cost Watchdog</h1>
+    <h1 style="color: white; margin: 0; font-size: 24px;">Cost Watchdog</h1>
     <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Kostenanomalie erkannt</p>
   </div>
 
   <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none;">
-    <p style="margin-top: 0;">Hallo ${data.recipientName},</p>
+    <p style="margin-top: 0;">Hallo ${safeRecipientName},</p>
 
     <p>wir haben eine Anomalie in Ihren Kostendaten erkannt:</p>
 
@@ -140,46 +155,54 @@ function generateAnomalyAlertHtml(data: AnomalyAlertEmailData): string {
         </span>
       </div>
 
-      <h3 style="margin: 0 0 10px 0; color: #1f2937;">${data.message}</h3>
+      <h3 style="margin: 0 0 10px 0; color: #1f2937;">${safeMessage}</h3>
 
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Lieferant:</td>
-          <td style="padding: 8px 0; font-weight: 500;">${data.supplierName}</td>
+          <td style="padding: 8px 0; font-weight: 500;">${safeSupplierName}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Standort:</td>
-          <td style="padding: 8px 0; font-weight: 500;">${data.locationName}</td>
+          <td style="padding: 8px 0; font-weight: 500;">${safeLocationName}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Kostenart:</td>
-          <td style="padding: 8px 0; font-weight: 500;">${data.costType}</td>
+          <td style="padding: 8px 0; font-weight: 500;">${safeCostType}</td>
         </tr>
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Betrag:</td>
           <td style="padding: 8px 0; font-weight: 600; color: ${severityColor};">${formatCurrency(data.amount)}</td>
         </tr>
-        ${data.expectedAmount ? `
+        ${
+          data.expectedAmount
+            ? `
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Erwartet:</td>
           <td style="padding: 8px 0;">${formatCurrency(data.expectedAmount)}</td>
         </tr>
-        ` : ''}
-        ${data.deviationPercent ? `
+        `
+            : ''
+        }
+        ${
+          data.deviationPercent
+            ? `
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Abweichung:</td>
           <td style="padding: 8px 0; font-weight: 500; color: ${severityColor};">${data.deviationPercent > 0 ? '+' : ''}${data.deviationPercent.toFixed(1)}%</td>
         </tr>
-        ` : ''}
+        `
+            : ''
+        }
         <tr>
           <td style="padding: 8px 0; color: #6b7280;">Zeitraum:</td>
-          <td style="padding: 8px 0;">${data.periodStart} - ${data.periodEnd}</td>
+          <td style="padding: 8px 0;">${safePeriodStart} - ${safePeriodEnd}</td>
         </tr>
       </table>
     </div>
 
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${data.dashboardUrl}/anomalies/${data.anomalyId}"
+      <a href="${anomalyUrl || '#'}"
          style="background: #2563eb; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 500; display: inline-block;">
         Anomalie prüfen
       </a>
@@ -193,7 +216,7 @@ function generateAnomalyAlertHtml(data: AnomalyAlertEmailData): string {
   <div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 12px;">
     <p style="margin: 0;">
       Diese E-Mail wurde automatisch von Cost Watchdog gesendet.<br>
-      <a href="${data.dashboardUrl}/settings/notifications" style="color: #6b7280;">Benachrichtigungseinstellungen ändern</a>
+      <a href="${notificationsUrl || '#'}" style="color: #6b7280;">Benachrichtigungseinstellungen ändern</a>
     </p>
   </div>
 </body>
@@ -238,6 +261,15 @@ Benachrichtigungseinstellungen: ${data.dashboardUrl}/settings/notifications
  */
 function generateDailyDigestHtml(data: DailyDigestEmailData): string {
   const totalCount = data.criticalCount + data.warningCount + data.infoCount;
+  const safeRecipientName = sanitizeString(data.recipientName);
+  const safeDate = sanitizeString(data.date);
+  const dashboardUrl = sanitizeUrl(data.dashboardUrl);
+  const anomaliesUrl = dashboardUrl
+    ? sanitizeUrl(`${dashboardUrl.replace(/\/$/, '')}/anomalies`)
+    : '';
+  const notificationsUrl = dashboardUrl
+    ? sanitizeUrl(`${dashboardUrl.replace(/\/$/, '')}/settings/notifications`)
+    : '';
 
   return `
 <!DOCTYPE html>
@@ -249,12 +281,12 @@ function generateDailyDigestHtml(data: DailyDigestEmailData): string {
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 30px; border-radius: 12px 12px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">📊 Cost Watchdog</h1>
-    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Tägliche Zusammenfassung - ${data.date}</p>
+    <h1 style="color: white; margin: 0; font-size: 24px;">Cost Watchdog</h1>
+    <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Tägliche Zusammenfassung - ${safeDate}</p>
   </div>
 
   <div style="background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none;">
-    <p style="margin-top: 0;">Hallo ${data.recipientName},</p>
+    <p style="margin-top: 0;">Hallo ${safeRecipientName},</p>
 
     <p>hier ist Ihre tägliche Zusammenfassung der Kostenanomalien:</p>
 
@@ -273,23 +305,31 @@ function generateDailyDigestHtml(data: DailyDigestEmailData): string {
       </div>
     </div>
 
-    ${totalCount > 0 ? `
+    ${
+      totalCount > 0
+        ? `
     <h3 style="margin: 25px 0 15px 0; font-size: 16px;">Top Anomalien</h3>
-    ${data.topAnomalies.map(a => `
+    ${data.topAnomalies
+      .map(
+        (a) => `
     <div style="background: white; border-radius: 8px; padding: 15px; margin-bottom: 10px; border-left: 4px solid ${getSeverityColor(a.severity)};">
-      <div style="font-weight: 500;">${a.message}</div>
+      <div style="font-weight: 500;">${sanitizeString(a.message)}</div>
       <div style="font-size: 14px; color: #6b7280; margin-top: 5px;">Betrag: ${formatCurrency(a.amount)}</div>
     </div>
-    `).join('')}
-    ` : `
+    `,
+      )
+      .join('')}
+    `
+        : `
     <div style="background: #d1fae5; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
-      <div style="font-size: 24px; margin-bottom: 10px;">✅</div>
+      <div style="font-size: 24px; margin-bottom: 10px;">OK</div>
       <div style="color: #065f46; font-weight: 500;">Keine neuen Anomalien heute</div>
     </div>
-    `}
+    `
+    }
 
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${data.dashboardUrl}/anomalies"
+      <a href="${anomaliesUrl || '#'}"
          style="background: #2563eb; color: white; padding: 12px 30px; border-radius: 8px; text-decoration: none; font-weight: 500; display: inline-block;">
         Zum Dashboard
       </a>
@@ -299,7 +339,7 @@ function generateDailyDigestHtml(data: DailyDigestEmailData): string {
   <div style="padding: 20px; text-align: center; color: #9ca3af; font-size: 12px;">
     <p style="margin: 0;">
       Diese E-Mail wurde automatisch von Cost Watchdog gesendet.<br>
-      <a href="${data.dashboardUrl}/settings/notifications" style="color: #6b7280;">Benachrichtigungseinstellungen ändern</a>
+      <a href="${notificationsUrl || '#'}" style="color: #6b7280;">Benachrichtigungseinstellungen ändern</a>
     </p>
   </div>
 </body>
@@ -335,7 +375,9 @@ export async function sendAnomalyAlertEmail(data: AnomalyAlertEmailData): Promis
       return { success: false, error: result.error.message };
     }
 
-    console.log(`[Email] Anomaly alert sent to ${recipientList.join(', ')}, messageId: ${result.data?.id}`);
+    console.log(
+      `[Email] Anomaly alert sent to ${recipientList.join(', ')}, messageId: ${result.data?.id}`,
+    );
     return { success: true, messageId: result.data?.id };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -360,9 +402,10 @@ export async function sendDailyDigestEmail(data: DailyDigestEmailData): Promise<
       from: EMAIL_CONFIG.from,
       replyTo: EMAIL_CONFIG.replyTo,
       to: data.recipientEmail,
-      subject: totalCount > 0
-        ? `📊 Tägliche Zusammenfassung: ${totalCount} Anomalie${totalCount > 1 ? 'n' : ''} - ${data.date}`
-        : `✅ Tägliche Zusammenfassung: Keine Anomalien - ${data.date}`,
+      subject:
+        totalCount > 0
+          ? `Tägliche Zusammenfassung: ${totalCount} Anomalie${totalCount > 1 ? 'n' : ''} - ${data.date}`
+          : `Tägliche Zusammenfassung: Keine Anomalien - ${data.date}`,
       html: generateDailyDigestHtml(data),
     });
 
@@ -371,7 +414,9 @@ export async function sendDailyDigestEmail(data: DailyDigestEmailData): Promise<
       return { success: false, error: result.error.message };
     }
 
-    console.log(`[Email] Daily digest sent to ${data.recipientEmail}, messageId: ${result.data?.id}`);
+    console.log(
+      `[Email] Daily digest sent to ${data.recipientEmail}, messageId: ${result.data?.id}`,
+    );
     return { success: true, messageId: result.data?.id };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

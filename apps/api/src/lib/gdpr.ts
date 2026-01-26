@@ -13,7 +13,7 @@ import { prisma } from './db.js';
 import { terminateAllSessions } from './sessions.js';
 import { invalidateAllFamiliesForUser } from './token-rotation.js';
 import { logAuditEvent, AuditAction, AuditEntityType } from './audit.js';
-import { createHash, randomBytes } from 'crypto';
+import { createHash } from 'crypto';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -130,10 +130,7 @@ export async function anonymizeAuditLogs(userId: string): Promise<number> {
   // Find all audit logs where this user is the performer or the subject
   const auditLogs = await prisma.auditLog.findMany({
     where: {
-      OR: [
-        { performedBy: userId },
-        { entityType: 'user', entityId: userId },
-      ],
+      OR: [{ performedBy: userId }, { entityType: 'user', entityId: userId }],
       anonymized: false,
     },
   });
@@ -178,7 +175,7 @@ export async function anonymizeAuditLogs(userId: string): Promise<number> {
  */
 function anonymizeJsonField(
   data: Record<string, unknown>,
-  userId: string
+  userId: string,
 ): Record<string, unknown> {
   const piiFields = ['email', 'firstName', 'lastName', 'avatarUrl', 'ssoSubject'];
   const result = { ...data };
@@ -301,7 +298,7 @@ export async function terminateUserSessions(userId: string): Promise<number> {
  */
 export async function performGdprDeletion(
   userId: string,
-  options: GdprDeletionOptions
+  options: GdprDeletionOptions,
 ): Promise<GdprDeletionResult> {
   // Check if user exists
   const user = await prisma.user.findUnique({

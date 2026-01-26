@@ -19,11 +19,13 @@ export function resolveUserNotificationSettings(value: unknown): UserNotificatio
   const settings = normalizeSettings(value);
 
   return {
-    emailAlertsEnabled: typeof settings['emailAlertsEnabled'] === 'boolean'
-      ? (settings['emailAlertsEnabled'] as boolean)
-      : DEFAULT_USER_NOTIFICATION_SETTINGS.emailAlertsEnabled,
-    dailyDigestEnabled: typeof settings['dailyDigestEnabled'] === 'boolean'
-      ? (settings['dailyDigestEnabled'] as boolean)
-      : DEFAULT_USER_NOTIFICATION_SETTINGS.dailyDigestEnabled,
+    emailAlertsEnabled:
+      typeof settings['emailAlertsEnabled'] === 'boolean'
+        ? (settings['emailAlertsEnabled'] as boolean)
+        : DEFAULT_USER_NOTIFICATION_SETTINGS.emailAlertsEnabled,
+    dailyDigestEnabled:
+      typeof settings['dailyDigestEnabled'] === 'boolean'
+        ? (settings['dailyDigestEnabled'] as boolean)
+        : DEFAULT_USER_NOTIFICATION_SETTINGS.dailyDigestEnabled,
   };
 }

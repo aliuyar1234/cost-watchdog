@@ -46,8 +46,8 @@ describe('Anomaly Engine', () => {
   describe('Price Per Unit Spike', () => {
     it('should detect price spike', () => {
       const currentPricePerUnit = 0.45;
-      const averagePricePerUnit = 0.30;
-      const threshold = 0.20; // 20%
+      const averagePricePerUnit = 0.3;
+      const threshold = 0.2; // 20%
 
       const deviation = (currentPricePerUnit - averagePricePerUnit) / averagePricePerUnit;
       const isAnomaly = Math.abs(deviation) > threshold;
@@ -62,8 +62,7 @@ describe('Anomaly Engine', () => {
       const values = [100, 105, 98, 102, 101, 99, 500]; // 500 is outlier
       const mean = values.slice(0, -1).reduce((a, b) => a + b, 0) / (values.length - 1);
       const variance =
-        values.slice(0, -1).reduce((a, b) => a + Math.pow(b - mean, 2), 0) /
-        (values.length - 2);
+        values.slice(0, -1).reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (values.length - 2);
       const stdDev = Math.sqrt(variance);
 
       const lastValue = values[values.length - 1];
@@ -75,7 +74,7 @@ describe('Anomaly Engine', () => {
 
   describe('Severity Determination', () => {
     it('should return critical for high deviation', () => {
-      const severity = determineSeverity(0.50); // 50% deviation
+      const severity = determineSeverity(0.5); // 50% deviation
       expect(severity).toBe('critical');
     });
 
@@ -85,7 +84,7 @@ describe('Anomaly Engine', () => {
     });
 
     it('should return info for low deviation', () => {
-      const severity = determineSeverity(0.10); // 10% deviation
+      const severity = determineSeverity(0.1); // 10% deviation
       expect(severity).toBe('info');
     });
   });
@@ -93,7 +92,7 @@ describe('Anomaly Engine', () => {
 
 function determineSeverity(deviation: number): 'info' | 'warning' | 'critical' {
   const absDeviation = Math.abs(deviation);
-  if (absDeviation >= 0.40) return 'critical';
-  if (absDeviation >= 0.20) return 'warning';
+  if (absDeviation >= 0.4) return 'critical';
+  if (absDeviation >= 0.2) return 'warning';
   return 'info';
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { createAnomalyEngine, DEFAULT_ANOMALY_SETTINGS, type CostRecordToCheck, type CheckContext } from '@cost-watchdog/core';
+import {
+  createAnomalyEngine,
+  DEFAULT_ANOMALY_SETTINGS,
+  type CostRecordToCheck,
+  type CheckContext,
+} from '@cost-watchdog/core';
 
 const baseRecord: CostRecordToCheck = {
   id: 'rec-1',
@@ -36,11 +41,24 @@ describe('Anomaly detection edge cases', () => {
     const result = await engine.detect(record, {
       ...baseContext,
       historicalRecords: [
-        { ...record, id: 'hist-1', amount: -40, periodStart: new Date('2023-01-01'), periodEnd: new Date('2023-01-31') },
+        {
+          ...record,
+          id: 'hist-1',
+          amount: -40,
+          periodStart: new Date('2023-01-01'),
+          periodEnd: new Date('2023-01-31'),
+        },
       ],
     });
 
-    expect(result.checkResults.every((c) => Number.isFinite((c.result as any)?.deviationPercent ?? 0))).toBe(true);
+    type DeviationResult = { deviationPercent?: number | null };
+
+    expect(
+      result.checkResults.every((c) => {
+        const deviationPercent = (c.result as DeviationResult | undefined)?.deviationPercent ?? 0;
+        return Number.isFinite(deviationPercent);
+      }),
+    ).toBe(true);
     expect(result.anomalies.length).toBeGreaterThanOrEqual(0);
   });
 

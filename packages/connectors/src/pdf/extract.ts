@@ -4,11 +4,7 @@ import type {
   ExtractedCostRecord,
 } from '@cost-watchdog/connector-sdk';
 import { createHash } from 'crypto';
-import {
-  extractTextFromPdf,
-  isScannedPdf,
-  type TextExtractionResult,
-} from './text-extractor.js';
+import { extractTextFromPdf, isScannedPdf, type TextExtractionResult } from './text-extractor.js';
 import {
   detectSupplier,
   extractUnknownSupplierName,
@@ -44,7 +40,7 @@ export interface PdfExtractionConfig {
  */
 export async function extractFromPdf(
   input: ConnectorInput,
-  config: PdfExtractionConfig = {}
+  config: PdfExtractionConfig = {},
 ): Promise<ExtractionResult> {
   const startTime = Date.now();
   const warnings: string[] = [];
@@ -211,8 +207,8 @@ export async function extractFromPdf(
  */
 function validateAndComplete(
   partial: Partial<ExtractedCostRecord>,
-  supplier: SupplierDetectionResult,
-  textResult: TextExtractionResult
+  _supplier: SupplierDetectionResult,
+  _textResult: TextExtractionResult,
 ): ExtractedCostRecord | null {
   // Required fields check
   if (!partial.amount || partial.amount <= 0) {
@@ -281,7 +277,7 @@ function validateAndComplete(
 function createErrorResult(
   error: string,
   warnings: string[],
-  inputHash: string = ''
+  inputHash: string = '',
 ): ExtractionResult {
   return {
     success: false,

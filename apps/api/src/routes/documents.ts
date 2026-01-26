@@ -12,6 +12,7 @@ import { getAccessibleDocuments } from '../lib/document-access.js';
 import { authenticate } from '../middleware/auth.js';
 import { getAuditContext } from '../middleware/request-context.js';
 import { documentService, type ServiceContext } from '../services/document.service.js';
+import { rateLimitEndpoint } from '../lib/rate-limit.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HELPERS
@@ -39,7 +40,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
   fastify.post(
     '/upload',
     {
-      preHandler: requireScope('write:documents'),
+      preHandler: [requireScope('write:documents'), rateLimitEndpoint('upload')],
       schema: {
         consumes: ['multipart/form-data'],
         response: {
@@ -77,7 +78,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         { buffer, filename: data.filename, mimetype: data.mimetype },
         request.user.sub,
         getContext(request),
-        request.log
+        request.log,
       );
 
       if (!result.success) {
@@ -97,7 +98,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
       }
 
       return reply.code(201).send(result.data);
-    }
+    },
   );
 
   /**
@@ -135,16 +136,18 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         status,
       });
 
-      const data = (documents as Array<{
-        id: string;
-        filename: string;
-        originalFilename: string;
-        mimeType: string;
-        fileSize: number;
-        extractionStatus: string;
-        verificationStatus: string;
-        uploadedAt: Date;
-      }>).map((doc) => ({
+      const data = (
+        documents as Array<{
+          id: string;
+          filename: string;
+          originalFilename: string;
+          mimeType: string;
+          fileSize: number;
+          extractionStatus: string;
+          verificationStatus: string;
+          uploadedAt: Date;
+        }>
+      ).map((doc) => ({
         id: doc.id,
         filename: doc.filename,
         originalFilename: doc.originalFilename,
@@ -159,7 +162,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         data,
         pagination: { total, limit, offset },
       });
-    }
+    },
   );
 
   /**
@@ -180,7 +183,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         id,
         request.user.sub,
         getContext(request),
-        request.log
+        request.log,
       );
 
       if (!accessResult.allowed) {
@@ -213,7 +216,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
       }
 
       return reply.send(document);
-    }
+    },
   );
 
   /**
@@ -231,7 +234,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         request.params.id,
         request.user.sub,
         getContext(request),
-        request.log
+        request.log,
       );
 
       if (!result.success) {
@@ -242,7 +245,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
       }
 
       return reply.send(result.data);
-    }
+    },
   );
 
   /**
@@ -260,7 +263,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         request.params.id,
         request.user.sub,
         getContext(request),
-        request.log
+        request.log,
       );
 
       if (!result.success) {
@@ -271,7 +274,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
       }
 
       return reply.code(204).send();
-    }
+    },
   );
 
   /**
@@ -289,7 +292,7 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         request.params.id,
         request.user.sub,
         getContext(request),
-        request.log
+        request.log,
       );
 
       if (!result.success) {
@@ -303,6 +306,6 @@ export default async function documentRoutes(fastify: FastifyInstance): Promise<
         success: true,
         message: result.data.message,
       });
-    }
+    },
   );
 }

@@ -242,7 +242,7 @@ function buildAnomalyAlertMessage(data: SlackAnomalyAlertData): SlackMessage {
           action_id: 'view_anomaly',
         },
       ],
-    }
+    },
   );
 
   return {
@@ -350,13 +350,14 @@ function buildDigestMessage(data: SlackDigestData): SlackMessage {
           action_id: 'view_dashboard',
         },
       ],
-    }
+    },
   );
 
   return {
-    text: totalCount > 0
-      ? `:chart_with_upwards_trend: Tägliche Zusammenfassung: ${totalCount} Anomalie${totalCount !== 1 ? 'n' : ''}`
-      : ':white_check_mark: Tägliche Zusammenfassung: Keine Anomalien',
+    text:
+      totalCount > 0
+        ? `:chart_with_upwards_trend: Tägliche Zusammenfassung: ${totalCount} Anomalie${totalCount !== 1 ? 'n' : ''}`
+        : ':white_check_mark: Tägliche Zusammenfassung: Keine Anomalien',
     channel: data.channel,
     username: 'Cost Watchdog',
     icon_emoji: ':dog:',

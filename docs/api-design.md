@@ -111,7 +111,7 @@
     "startDate": "2024-01-01",
     "endDate": "2024-12-31"
   },
-  
+
   "summary": {
     "totalCosts": 1847320.45,
     "currency": "EUR",
@@ -119,7 +119,7 @@
     "locationCount": 12,
     "supplierCount": 34
   },
-  
+
   "comparison": {
     "previousPeriod": {
       "year": 2023,
@@ -130,7 +130,7 @@
       }
     }
   },
-  
+
   "byCostType": [
     {
       "costType": "electricity",
@@ -154,7 +154,7 @@
     },
     // ...
   ],
-  
+
   "byLocation": [
     {
       "locationId": "loc_abc123",
@@ -169,14 +169,14 @@
     },
     // ...
   ],
-  
+
   "byMonth": [
     { "month": "2024-01", "totalCosts": 142500.00 },
     { "month": "2024-02", "totalCosts": 138200.00 },
     { "month": "2024-03", "totalCosts": 145800.00 },
     // ...
   ],
-  
+
   "anomalies": {
     "total": 23,
     "bySeverity": {
@@ -187,7 +187,7 @@
     "unacknowledged": 7,
     "potentialSavings": 34500.00  // Geschätzt
   },
-  
+
   "topAnomalies": [
     {
       "id": "anom_xyz789",
@@ -204,7 +204,7 @@
     },
     // ...
   ],
-  
+
   "dataQuality": {
     "totalRecords": 1247,
     "verified": 1180,
@@ -216,4 +216,3 @@
 ```
 
 ---
-

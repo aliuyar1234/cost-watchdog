@@ -51,16 +51,13 @@ export function hashToken(token: string): string {
  */
 export async function checkResetRateLimit(
   email: string,
-  ipAddress: string
+  ipAddress: string,
 ): Promise<{ allowed: boolean; reason?: string; retryAfter?: number }> {
   const normalizedEmail = email.toLowerCase();
   const emailKey = `password_reset:email:${normalizedEmail}`;
   const ipKey = `password_reset:ip:${ipAddress}`;
 
-  const [emailCount, ipCount] = await Promise.all([
-    redis.get(emailKey),
-    redis.get(ipKey),
-  ]);
+  const [emailCount, ipCount] = await Promise.all([redis.get(emailKey), redis.get(ipKey)]);
 
   const currentEmailCount = emailCount ? parseInt(emailCount, 10) : 0;
   const currentIpCount = ipCount ? parseInt(ipCount, 10) : 0;
@@ -120,7 +117,7 @@ export interface CreateResetResult {
  */
 export async function createPasswordResetToken(
   email: string,
-  ipAddress: string
+  ipAddress: string,
 ): Promise<CreateResetResult> {
   const normalizedEmail = email.toLowerCase();
 
@@ -226,7 +223,7 @@ export interface ResetPasswordResult {
  */
 export async function resetPassword(
   token: string,
-  newPassword: string
+  newPassword: string,
 ): Promise<ResetPasswordResult> {
   // Validate token
   const validation = await validateResetToken(token);
@@ -287,10 +284,7 @@ export async function resetPassword(
 export async function cleanupExpiredTokens(): Promise<number> {
   const result = await prisma.passwordResetToken.deleteMany({
     where: {
-      OR: [
-        { expiresAt: { lt: new Date() } },
-        { usedAt: { not: null } },
-      ],
+      OR: [{ expiresAt: { lt: new Date() } }, { usedAt: { not: null } }],
     },
   });
   return result.count;

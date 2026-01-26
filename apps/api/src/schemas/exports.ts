@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { dateSchema, paginationSchema, uuidSchema, sortOrderSchema } from './common.js';
+import { dateSchema, uuidSchema } from './common.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORT FORMAT
@@ -18,25 +18,27 @@ export type ExportFormat = z.infer<typeof exportFormatSchema>;
 // EXPORT REQUEST
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const exportRequestSchema = z.object({
-  format: exportFormatSchema.default('csv'),
-  startDate: dateSchema.optional(),
-  endDate: dateSchema.optional(),
-  locationIds: z.array(uuidSchema).optional(),
-  costCenterIds: z.array(uuidSchema).optional(),
-  supplierIds: z.array(uuidSchema).optional(),
-  costTypes: z.array(z.string()).optional(),
-  includeAnomalies: z.boolean().default(false),
-  columns: z.array(z.string()).optional(),
-}).refine(
-  (data) => {
-    if (data.startDate && data.endDate) {
-      return data.startDate <= data.endDate;
-    }
-    return true;
-  },
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const exportRequestSchema = z
+  .object({
+    format: exportFormatSchema.default('csv'),
+    startDate: dateSchema.optional(),
+    endDate: dateSchema.optional(),
+    locationIds: z.array(uuidSchema).optional(),
+    costCenterIds: z.array(uuidSchema).optional(),
+    supplierIds: z.array(uuidSchema).optional(),
+    costTypes: z.array(z.string()).optional(),
+    includeAnomalies: z.boolean().default(false),
+    columns: z.array(z.string()).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        return data.startDate <= data.endDate;
+      }
+      return true;
+    },
+    { message: 'startDate must be before or equal to endDate' },
+  );
 
 export type ExportRequestInput = z.infer<typeof exportRequestSchema>;
 
@@ -44,27 +46,29 @@ export type ExportRequestInput = z.infer<typeof exportRequestSchema>;
 // COST RECORDS EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const costRecordsExportSchema = z.object({
-  format: exportFormatSchema.default('csv'),
-  startDate: dateSchema.optional(),
-  endDate: dateSchema.optional(),
-  locationIds: z.array(uuidSchema).optional(),
-  costCenterIds: z.array(uuidSchema).optional(),
-  supplierIds: z.array(uuidSchema).optional(),
-  costTypes: z.array(z.string()).optional(),
-  includeAnomalies: z.boolean().default(false),
-  columns: z.array(z.string()).optional(),
-  groupBy: z.enum(['location', 'supplier', 'costType', 'month', 'none']).default('none'),
-  aggregation: z.enum(['sum', 'avg', 'count', 'none']).default('none'),
-}).refine(
-  (data) => {
-    if (data.startDate && data.endDate) {
-      return data.startDate <= data.endDate;
-    }
-    return true;
-  },
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const costRecordsExportSchema = z
+  .object({
+    format: exportFormatSchema.default('csv'),
+    startDate: dateSchema.optional(),
+    endDate: dateSchema.optional(),
+    locationIds: z.array(uuidSchema).optional(),
+    costCenterIds: z.array(uuidSchema).optional(),
+    supplierIds: z.array(uuidSchema).optional(),
+    costTypes: z.array(z.string()).optional(),
+    includeAnomalies: z.boolean().default(false),
+    columns: z.array(z.string()).optional(),
+    groupBy: z.enum(['location', 'supplier', 'costType', 'month', 'none']).default('none'),
+    aggregation: z.enum(['sum', 'avg', 'count', 'none']).default('none'),
+  })
+  .refine(
+    (data) => {
+      if (data.startDate && data.endDate) {
+        return data.startDate <= data.endDate;
+      }
+      return true;
+    },
+    { message: 'startDate must be before or equal to endDate' },
+  );
 
 export type CostRecordsExportInput = z.infer<typeof costRecordsExportSchema>;
 

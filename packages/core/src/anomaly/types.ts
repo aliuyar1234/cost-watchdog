@@ -1,4 +1,4 @@
-import type { CostType, AnomalySeverity, AnomalyStatus } from '../types';
+import type { CostType, AnomalySeverity } from '../types';
 
 // Re-export from core types
 export type { AnomalySeverity, AnomalyStatus } from '../types';

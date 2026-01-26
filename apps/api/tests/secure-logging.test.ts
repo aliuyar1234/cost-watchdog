@@ -310,7 +310,9 @@ describe('Secure Logging', () => {
       const serializedReq = requestSerializer(request);
       const redactedBody = redactObject(request.body) as Record<string, unknown>;
 
-      expect((serializedReq.headers as Record<string, string>).authorization).toBe('Bearer [REDACTED]');
+      expect((serializedReq.headers as Record<string, string>).authorization).toBe(
+        'Bearer [REDACTED]',
+      );
       expect((serializedReq.headers as Record<string, string>).cookie).toBe('[REDACTED]');
       expect(redactedBody.refreshToken).toBe('[REDACTED]');
     });

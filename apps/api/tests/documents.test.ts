@@ -19,7 +19,6 @@ vi.mock('../src/lib/s3.js', () => ({
 describe('Document Routes', () => {
   let app: ReturnType<typeof Fastify>;
   let adminToken: string;
-  let viewerToken: string;
   let adminUserId: string;
 
   beforeEach(async () => {
@@ -50,31 +49,15 @@ describe('Document Routes', () => {
       role: admin.role,
     });
     adminToken = adminTokens.accessToken;
-
-    // Create viewer user
-    const viewer = await prisma.user.create({
-      data: {
-        email: 'viewer@test.com',
-        passwordHash: 'placeholder',
-        firstName: 'Viewer',
-        lastName: 'User',
-        role: 'viewer',
-      },
-    });
-
-    const viewerTokens = await generateTokenPair({
-      id: viewer.id,
-      email: viewer.email,
-      role: viewer.role,
-    });
-    viewerToken = viewerTokens.accessToken;
   });
 
-  async function createTestDocument(overrides: Partial<{
-    filename: string;
-    fileHash: string;
-    extractionStatus: string;
-  }> = {}) {
+  async function createTestDocument(
+    overrides: Partial<{
+      filename: string;
+      fileHash: string;
+      extractionStatus: string;
+    }> = {},
+  ) {
     return prisma.document.create({
       data: {
         filename: overrides.filename || 'test-document.pdf',
@@ -187,6 +170,7 @@ describe('Document Routes', () => {
 
       const allowedDoc = await createTestDocument({ filename: 'allowed.pdf' });
       const blockedDoc = await createTestDocument({ filename: 'blocked.pdf' });
+      const nullLocationDoc = await createTestDocument({ filename: 'null-location.pdf' });
 
       await prisma.costRecord.create({
         data: {
@@ -214,6 +198,18 @@ describe('Document Routes', () => {
         },
       });
 
+      await prisma.costRecord.create({
+        data: {
+          sourceDocumentId: nullLocationDoc.id,
+          supplierId: supplier.id,
+          periodStart: new Date('2024-03-01'),
+          periodEnd: new Date('2024-03-31'),
+          amount: 700,
+          costType: 'electricity',
+          currency: 'EUR',
+        },
+      });
+
       const restrictedUser = await prisma.user.create({
         data: {
           email: 'restricted@test.com',
@@ -222,6 +218,115 @@ describe('Document Routes', () => {
           lastName: 'User',
           role: 'viewer',
           allowedLocationIds: [allowedLocation.id],
+        },
+      });
+
+      const restrictedTokens = await generateTokenPair({
+        id: restrictedUser.id,
+        email: restrictedUser.email,
+        role: restrictedUser.role,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/documents',
+        headers: { authorization: `Bearer ${restrictedTokens.accessToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.data.length).toBe(1);
+      expect(body.data[0].id).toBe(allowedDoc.id);
+    });
+
+    it('treats missing costCenterId as no match when cost center restrictions exist', async () => {
+      const org = await prisma.organization.create({
+        data: { name: 'Cost Center Org', legalName: 'Cost Center GmbH' },
+      });
+      const location = await prisma.location.create({
+        data: {
+          organizationId: org.id,
+          name: 'HQ',
+          address: { country: 'DE' },
+          type: 'office',
+          ownershipType: 'leased',
+        },
+      });
+      const allowedCostCenter = await prisma.costCenter.create({
+        data: {
+          organizationId: org.id,
+          name: 'Allowed CC',
+          code: 'CC_ALLOWED',
+        },
+      });
+      const blockedCostCenter = await prisma.costCenter.create({
+        data: {
+          organizationId: org.id,
+          name: 'Blocked CC',
+          code: 'CC_BLOCKED',
+        },
+      });
+      const supplier = await prisma.supplier.create({
+        data: {
+          name: 'Cost Center Supplier',
+          category: 'energy_electricity',
+          costTypes: ['electricity'],
+        },
+      });
+
+      const allowedDoc = await createTestDocument({ filename: 'allowed-cc.pdf' });
+      const blockedDoc = await createTestDocument({ filename: 'blocked-cc.pdf' });
+      const nullCostCenterDoc = await createTestDocument({ filename: 'null-cost-center.pdf' });
+
+      await prisma.costRecord.create({
+        data: {
+          sourceDocumentId: allowedDoc.id,
+          supplierId: supplier.id,
+          locationId: location.id,
+          costCenterId: allowedCostCenter.id,
+          periodStart: new Date('2024-01-01'),
+          periodEnd: new Date('2024-01-31'),
+          amount: 500,
+          costType: 'electricity',
+          currency: 'EUR',
+        },
+      });
+
+      await prisma.costRecord.create({
+        data: {
+          sourceDocumentId: blockedDoc.id,
+          supplierId: supplier.id,
+          locationId: location.id,
+          costCenterId: blockedCostCenter.id,
+          periodStart: new Date('2024-02-01'),
+          periodEnd: new Date('2024-02-28'),
+          amount: 600,
+          costType: 'electricity',
+          currency: 'EUR',
+        },
+      });
+
+      await prisma.costRecord.create({
+        data: {
+          sourceDocumentId: nullCostCenterDoc.id,
+          supplierId: supplier.id,
+          locationId: location.id,
+          periodStart: new Date('2024-03-01'),
+          periodEnd: new Date('2024-03-31'),
+          amount: 700,
+          costType: 'electricity',
+          currency: 'EUR',
+        },
+      });
+
+      const restrictedUser = await prisma.user.create({
+        data: {
+          email: 'cc-restricted@test.com',
+          passwordHash: 'placeholder',
+          firstName: 'Restricted',
+          lastName: 'User',
+          role: 'viewer',
+          allowedCostCenterIds: [allowedCostCenter.id],
         },
       });
 
@@ -571,11 +676,11 @@ describe('Document Upload Validation', () => {
     ];
 
     // Verify the validation logic
-    invalidTypes.forEach(type => {
+    invalidTypes.forEach((type) => {
       expect(allowedTypes.includes(type)).toBe(false);
     });
 
-    allowedTypes.forEach(type => {
+    allowedTypes.forEach((type) => {
       expect(allowedTypes.includes(type)).toBe(true);
     });
   });

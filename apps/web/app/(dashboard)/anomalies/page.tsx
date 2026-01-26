@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
+import { LinkButton } from '../../components/ui/link-button';
 import { anomaliesApi, type Anomaly, type AnomalyStats } from '../../lib/api';
 import {
   formatDate,
@@ -46,6 +46,7 @@ export default function AnomaliesPage() {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [stats, setStats] = useState<AnomalyStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('new');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [pagination, setPagination] = useState({
@@ -55,8 +56,9 @@ export default function AnomaliesPage() {
     hasMore: false,
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
+      setError(null);
       const [anomaliesResponse, statsResponse] = await Promise.all([
         anomaliesApi.list({
           status: statusFilter === 'all' ? undefined : statusFilter,
@@ -71,22 +73,20 @@ export default function AnomaliesPage() {
       setPagination(anomaliesResponse.pagination);
       setStats(statsResponse);
     } catch (error) {
-      console.error('Failed to fetch anomalies:', error);
+      setError(error instanceof Error ? error.message : 'Anomalien konnten nicht geladen werden.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pagination.limit, pagination.offset, severityFilter, statusFilter]);
 
   useEffect(() => {
     setIsLoading(true);
-    fetchData();
-  }, [statusFilter, severityFilter, pagination.offset]);
+    void fetchData();
+  }, [fetchData]);
 
-  const handleAction = async (
-    id: string,
-    action: 'acknowledge' | 'resolve' | 'false_positive'
-  ) => {
+  const handleAction = async (id: string, action: 'acknowledge' | 'resolve' | 'false_positive') => {
     try {
+      setError(null);
       switch (action) {
         case 'acknowledge':
           await anomaliesApi.acknowledge(id);
@@ -100,14 +100,14 @@ export default function AnomaliesPage() {
       }
       await fetchData();
     } catch (error) {
-      console.error(`Failed to ${action} anomaly:`, error);
+      setError(error instanceof Error ? error.message : 'Aktion fehlgeschlagen.');
     }
   };
 
   if (isLoading && anomalies.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      <div className="flex h-64 items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
       </div>
     );
   }
@@ -121,37 +121,44 @@ export default function AnomaliesPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Anomalien</h1>
-        <p className="text-gray-500 mt-1">
-          Erkannte Kostenabweichungen prüfen und bearbeiten
-        </p>
+        <p className="mt-1 text-gray-500">Erkannte Kostenabweichungen prüfen und bearbeiten</p>
       </div>
 
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-red-700">{error}</p>
+            <Button variant="outline" size="sm" onClick={() => void fetchData()}>
+              Erneut versuchen
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm font-medium text-gray-500">Offene Anomalien</div>
-            <div className="text-3xl font-bold text-gray-900 mt-2">{newCount}</div>
+            <div className="mt-2 text-3xl font-bold text-gray-900">{newCount}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm font-medium text-gray-500">Kritisch</div>
-            <div className="text-3xl font-bold text-red-600 mt-2">{criticalCount}</div>
+            <div className="mt-2 text-3xl font-bold text-red-600">{criticalCount}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm font-medium text-gray-500">Warnungen</div>
-            <div className="text-3xl font-bold text-yellow-600 mt-2">{warningCount}</div>
+            <div className="mt-2 text-3xl font-bold text-yellow-600">{warningCount}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-sm font-medium text-gray-500">Letzte 24h</div>
-            <div className="text-3xl font-bold text-blue-600 mt-2">
-              {stats?.newLast24h || 0}
-            </div>
+            <div className="mt-2 text-3xl font-bold text-blue-600">{stats?.newLast24h || 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -161,9 +168,7 @@ export default function AnomaliesPage() {
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) => {
@@ -180,9 +185,7 @@ export default function AnomaliesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Priorität
-              </label>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Priorität</label>
               <select
                 value={severityFilter}
                 onChange={(e) => {
@@ -210,7 +213,7 @@ export default function AnomaliesPage() {
         </CardHeader>
         <CardContent>
           {anomalies.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="py-12 text-center">
               <svg
                 className="mx-auto h-12 w-12 text-gray-400"
                 fill="none"
@@ -224,9 +227,7 @@ export default function AnomaliesPage() {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
-                Keine Anomalien gefunden
-              </h3>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">Keine Anomalien gefunden</h3>
               <p className="mt-1 text-sm text-gray-500">
                 {statusFilter === 'new'
                   ? 'Alle Anomalien wurden bearbeitet.'
@@ -238,11 +239,11 @@ export default function AnomaliesPage() {
               {anomalies.map((anomaly) => (
                 <div
                   key={anomaly.id}
-                  className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                  className="rounded-lg border p-4 transition-colors hover:bg-gray-50"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="mb-2 flex items-center gap-2">
                         {getSeverityBadge(anomaly.severity)}
                         {getAnomalyStatusBadge(anomaly.status)}
                         <span className="text-xs text-gray-500">
@@ -254,8 +255,7 @@ export default function AnomaliesPage() {
                         <div className="mt-2 text-sm text-gray-600">
                           <div className="flex flex-wrap gap-x-4 gap-y-1">
                             <span>
-                              <strong>Betrag:</strong>{' '}
-                              {formatCurrency(anomaly.costRecord.amount)}
+                              <strong>Betrag:</strong> {formatCurrency(anomaly.costRecord.amount)}
                             </span>
                             <span>
                               <strong>Kostenart:</strong>{' '}
@@ -264,14 +264,12 @@ export default function AnomaliesPage() {
                             </span>
                             {anomaly.costRecord.supplier && (
                               <span>
-                                <strong>Lieferant:</strong>{' '}
-                                {anomaly.costRecord.supplier.name}
+                                <strong>Lieferant:</strong> {anomaly.costRecord.supplier.name}
                               </span>
                             )}
                             {anomaly.costRecord.location && (
                               <span>
-                                <strong>Standort:</strong>{' '}
-                                {anomaly.costRecord.location.name}
+                                <strong>Standort:</strong> {anomaly.costRecord.location.name}
                               </span>
                             )}
                           </div>
@@ -284,12 +282,10 @@ export default function AnomaliesPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 ml-4">
-                      <Link href={`/anomalies/${anomaly.id}`}>
-                        <Button variant="outline" size="sm">
-                          Details
-                        </Button>
-                      </Link>
+                    <div className="ml-4 flex items-center gap-2">
+                      <LinkButton href={`/anomalies/${anomaly.id}`} variant="outline" size="sm">
+                        Details
+                      </LinkButton>
                       {anomaly.status === 'new' && (
                         <>
                           <Button
@@ -325,7 +321,7 @@ export default function AnomaliesPage() {
 
               {/* Pagination */}
               {pagination.total > pagination.limit && (
-                <div className="flex items-center justify-between pt-4 border-t">
+                <div className="flex items-center justify-between border-t pt-4">
                   <div className="text-sm text-gray-500">
                     Zeige {pagination.offset + 1} bis{' '}
                     {Math.min(pagination.offset + anomalies.length, pagination.total)} von{' '}
@@ -349,9 +345,7 @@ export default function AnomaliesPage() {
                       variant="outline"
                       size="sm"
                       disabled={!pagination.hasMore}
-                      onClick={() =>
-                        setPagination((p) => ({ ...p, offset: p.offset + p.limit }))
-                      }
+                      onClick={() => setPagination((p) => ({ ...p, offset: p.offset + p.limit }))}
                     >
                       Weiter
                     </Button>

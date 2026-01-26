@@ -5,7 +5,7 @@ import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { checkDatabaseHealth, disconnectDatabase } from './lib/db.js';
 import requestContextPlugin from './middleware/request-context.js';
-import authPlugin from './middleware/auth.js';
+import authPlugin, { authenticate } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import documentRoutes from './routes/documents.js';
 import anomalyRoutes from './routes/anomalies.js';
@@ -26,7 +26,6 @@ import { createRateLimitHook, RATE_LIMITS } from './lib/rate-limit.js';
 import { registerOpenApi } from './lib/openapi.js';
 import { secrets } from './lib/secrets.js';
 import csrfMiddleware, { csrfRoutes } from './middleware/csrf.js';
-import { initializeFromEnv as initializeFieldEncryption } from './lib/field-encryption.js';
 import { getSecureLoggerConfig } from './middleware/secure-logging.js';
 
 /**
@@ -35,6 +34,17 @@ import { getSecureLoggerConfig } from './middleware/secure-logging.js';
  */
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 const COOKIE_SECRET = process.env['COOKIE_SECRET'] || secrets.getAuthSecret();
+const TRUST_PROXY_RAW = process.env['TRUST_PROXY'];
+
+// Trust proxy headers only when explicitly configured. This prevents IP spoofing when
+// the API is exposed directly to the internet without a reverse proxy.
+const TRUST_PROXY: boolean | number = (() => {
+  if (!TRUST_PROXY_RAW) return false;
+  const normalized = TRUST_PROXY_RAW.trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes') return true;
+  if (/^\d+$/.test(normalized)) return parseInt(normalized, 10);
+  return false;
+})();
 
 // Validate cookie secret in production - REQUIRED for session security
 if (IS_PRODUCTION && !COOKIE_SECRET) {
@@ -42,16 +52,6 @@ if (IS_PRODUCTION && !COOKIE_SECRET) {
 }
 if (IS_PRODUCTION && COOKIE_SECRET && COOKIE_SECRET.length < 32) {
   throw new Error('FATAL: COOKIE_SECRET must be at least 32 characters long');
-}
-
-// Initialize field encryption (required for MFA and sensitive data)
-try {
-  initializeFieldEncryption();
-} catch (err) {
-  if (IS_PRODUCTION) {
-    throw err; // Fatal in production
-  }
-  console.warn('[Encryption] Field encryption not configured, using fallback. Set FIELD_ENCRYPTION_KEY for production.');
 }
 
 // Get secure logger configuration (redacts sensitive data like passwords, tokens, etc.)
@@ -79,8 +79,8 @@ const fastify = Fastify({
       },
     } as Record<string, (arg: unknown) => unknown>,
   },
-  // Trust proxy headers when behind a reverse proxy (needed for rate limiting)
-  trustProxy: IS_PRODUCTION,
+  // Trust proxy headers only when configured (see TRUST_PROXY env var).
+  trustProxy: TRUST_PROXY,
   // Generate request IDs via the request-context middleware
   genReqId: () => '',
 });
@@ -142,7 +142,14 @@ fastify.addHook('preHandler', validateApiKey);
 // Register CSRF protection middleware
 // Skips API key authenticated requests and safe methods (GET/HEAD/OPTIONS)
 await fastify.register(csrfMiddleware, {
-  ignorePaths: ['/health', '/metrics', '/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/forgot-password', '/api/v1/auth/reset-password'],
+  ignorePaths: [
+    '/health',
+    '/metrics',
+    '/api/v1/auth/login',
+    '/api/v1/auth/register',
+    '/api/v1/auth/forgot-password',
+    '/api/v1/auth/reset-password',
+  ],
   skipForApiKey: true,
 });
 
@@ -154,19 +161,31 @@ fastify.addHook('preHandler', createRateLimitHook(RATE_LIMITS.default));
 
 // Add metrics collection hook
 fastify.addHook('onResponse', async (request, reply) => {
-  const startTime = request.requestContext?.requestId
-    ? Date.now() - (request as { startTime?: number }).startTime!
-    : 0;
-
   // Skip metrics endpoint to avoid recursion
-  if (request.url === '/metrics') return;
+  if (request.url === '/metrics' || request.url.startsWith('/metrics/')) return;
+
+  const startedAt = (request as { startTime?: number }).startTime ?? Date.now();
+  const durationMs = Date.now() - startedAt;
+
+  const requestSize = request.headers['content-length']
+    ? parseInt(request.headers['content-length'] as string, 10)
+    : undefined;
+
+  const responseSizeHeader = reply.getHeader('content-length');
+  const responseSize =
+    typeof responseSizeHeader === 'number'
+      ? responseSizeHeader
+      : typeof responseSizeHeader === 'string'
+        ? parseInt(responseSizeHeader, 10)
+        : undefined;
 
   recordHttpRequest(
     request.method,
     request.url,
     reply.statusCode,
-    startTime,
-    request.headers['content-length'] ? parseInt(request.headers['content-length'] as string, 10) : undefined
+    durationMs,
+    requestSize,
+    responseSize,
   );
 });
 
@@ -201,44 +220,49 @@ fastify.get('/health', async (request, reply) => {
 });
 
 // Detailed health check for authenticated admins
-fastify.get('/health/detailed', {
-  preHandler: [
-    async (request, reply) => {
-      // Check if user is authenticated and is admin
-      if (!request.user || request.user.role !== 'admin') {
-        return reply.code(401).send({ error: 'Unauthorized' });
-      }
-    },
-  ],
-}, async (request, reply) => {
-  const dbHealthy = await checkDatabaseHealth();
-
-  // Check Redis health
-  let redisHealthy = false;
-  try {
-    const { redis } = await import('./lib/redis.js');
-    await redis.ping();
-    redisHealthy = true;
-  } catch {
-    redisHealthy = false;
-  }
-
-  const allHealthy = dbHealthy && redisHealthy;
-
-  reply.code(allHealthy ? 200 : 503);
-  return {
-    status: allHealthy ? 'healthy' : 'unhealthy',
-    timestamp: new Date().toISOString(),
-    services: {
-      database: {
-        status: dbHealthy ? 'up' : 'down',
+fastify.get(
+  '/health/detailed',
+  {
+    preHandler: [
+      authenticate,
+      async (request, reply) => {
+        // Check if user is authenticated and is admin
+        if (!request.user || request.user.role !== 'admin') {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
       },
-      redis: {
-        status: redisHealthy ? 'up' : 'down',
+    ],
+  },
+  async (request, reply) => {
+    const dbHealthy = await checkDatabaseHealth();
+
+    // Check Redis health
+    let redisHealthy = false;
+    try {
+      const { redis } = await import('./lib/redis.js');
+      await redis.ping();
+      redisHealthy = true;
+    } catch {
+      redisHealthy = false;
+    }
+
+    const allHealthy = dbHealthy && redisHealthy;
+
+    reply.code(allHealthy ? 200 : 503);
+    return {
+      status: allHealthy ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: {
+          status: dbHealthy ? 'up' : 'down',
+        },
+        redis: {
+          status: redisHealthy ? 'up' : 'down',
+        },
       },
-    },
-  };
-});
+    };
+  },
+);
 
 // Prometheus metrics endpoint (unauthenticated, protect at network level)
 await fastify.register(metricsRoutes, { prefix: '/metrics' });
@@ -298,7 +322,7 @@ fastify.register(
     // Register OpenAPI documentation routes
     await registerOpenApi(app);
   },
-  { prefix: '/api/v1' }
+  { prefix: '/api/v1' },
 );
 
 // Graceful shutdown

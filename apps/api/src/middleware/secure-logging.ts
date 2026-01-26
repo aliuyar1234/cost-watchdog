@@ -11,13 +11,7 @@ import fp from 'fastify-plugin';
 // SENSITIVE PATTERNS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const SENSITIVE_HEADERS = [
-  'authorization',
-  'x-api-key',
-  'cookie',
-  'set-cookie',
-  'x-csrf-token',
-];
+const SENSITIVE_HEADERS = ['authorization', 'x-api-key', 'cookie', 'set-cookie', 'x-csrf-token'];
 
 const SENSITIVE_BODY_FIELDS = [
   'password',
@@ -112,7 +106,9 @@ export function redactString(str: string): string {
 /**
  * Redact headers object.
  */
-export function redactHeaders(headers: Record<string, string | string[] | undefined>): Record<string, string> {
+export function redactHeaders(
+  headers: Record<string, string | string[] | undefined>,
+): Record<string, string> {
   const result: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers)) {
     result[key] = redactHeader(key, value);
@@ -183,7 +179,7 @@ async function secureLoggingMiddleware(fastify: FastifyInstance): Promise<void> 
   // Note: This should be applied at Fastify instance creation for full effect
   // This hook adds runtime protection for dynamic logging
 
-  fastify.addHook('onRequest', async (request) => {
+  fastify.addHook('onRequest', async (_request) => {
     // Ensure request.log uses secure serializers
     // The serializers should be configured at Fastify creation time
     // This is a safety net for any manual logging

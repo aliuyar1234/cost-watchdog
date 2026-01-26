@@ -11,6 +11,13 @@ export const QUEUE_NAMES = {
   AGGREGATION: 'aggregation',
 } as const;
 
+function attachQueueErrorHandler(queue: Queue, queueName: string): void {
+  queue.on('error', (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Queue:${queueName}] ${message}`);
+  });
+}
+
 /**
  * Job data for document extraction.
  */
@@ -47,98 +54,111 @@ export interface AggregationJobData {
   type: 'update' | 'full_rebuild';
 }
 
-/**
- * Extraction queue instance.
- */
-export const extractionQueue = new Queue<ExtractionJobData>(QUEUE_NAMES.EXTRACTION, {
-  connection: createRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 5000,
-    },
-    removeOnComplete: {
-      age: 24 * 3600, // Keep completed jobs for 24 hours
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 7 * 24 * 3600, // Keep failed jobs for 7 days
-    },
-  },
-});
+type QueueInstances = {
+  extraction: Queue<ExtractionJobData>;
+  anomalyDetection: Queue<AnomalyDetectionJobData>;
+  alerts: Queue<AlertJobData>;
+  aggregation: Queue<AggregationJobData>;
+};
 
-/**
- * Anomaly detection queue instance.
- */
-export const anomalyQueue = new Queue<AnomalyDetectionJobData>(QUEUE_NAMES.ANOMALY_DETECTION, {
-  connection: createRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 24 * 3600,
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 7 * 24 * 3600,
-    },
-  },
-});
+let queues: QueueInstances | null = null;
 
-/**
- * Alert queue instance.
- */
-export const alertQueue = new Queue<AlertJobData>(QUEUE_NAMES.ALERTS, {
-  connection: createRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 5000,
+function createQueues(): QueueInstances {
+  const extraction = new Queue<ExtractionJobData>(QUEUE_NAMES.EXTRACTION, {
+    connection: createRedisConnection(),
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
+      removeOnComplete: {
+        age: 24 * 3600, // Keep completed jobs for 24 hours
+        count: 1000,
+      },
+      removeOnFail: {
+        age: 7 * 24 * 3600, // Keep failed jobs for 7 days
+      },
     },
-    removeOnComplete: {
-      age: 24 * 3600,
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 7 * 24 * 3600,
-    },
-  },
-});
+  });
+  attachQueueErrorHandler(extraction, QUEUE_NAMES.EXTRACTION);
 
-/**
- * Aggregation queue instance.
- */
-export const aggregationQueue = new Queue<AggregationJobData>(QUEUE_NAMES.AGGREGATION, {
-  connection: createRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000,
+  const anomalyDetection = new Queue<AnomalyDetectionJobData>(QUEUE_NAMES.ANOMALY_DETECTION, {
+    connection: createRedisConnection(),
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+      removeOnComplete: {
+        age: 24 * 3600,
+        count: 1000,
+      },
+      removeOnFail: {
+        age: 7 * 24 * 3600,
+      },
     },
-    removeOnComplete: {
-      age: 24 * 3600,
-      count: 1000,
+  });
+  attachQueueErrorHandler(anomalyDetection, QUEUE_NAMES.ANOMALY_DETECTION);
+
+  const alerts = new Queue<AlertJobData>(QUEUE_NAMES.ALERTS, {
+    connection: createRedisConnection(),
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000,
+      },
+      removeOnComplete: {
+        age: 24 * 3600,
+        count: 1000,
+      },
+      removeOnFail: {
+        age: 7 * 24 * 3600,
+      },
     },
-    removeOnFail: {
-      age: 7 * 24 * 3600,
+  });
+  attachQueueErrorHandler(alerts, QUEUE_NAMES.ALERTS);
+
+  const aggregation = new Queue<AggregationJobData>(QUEUE_NAMES.AGGREGATION, {
+    connection: createRedisConnection(),
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+      removeOnComplete: {
+        age: 24 * 3600,
+        count: 1000,
+      },
+      removeOnFail: {
+        age: 7 * 24 * 3600,
+      },
     },
-  },
-});
+  });
+  attachQueueErrorHandler(aggregation, QUEUE_NAMES.AGGREGATION);
+
+  return { extraction, anomalyDetection, alerts, aggregation };
+}
+
+function getQueues(): QueueInstances {
+  if (!queues) {
+    queues = createQueues();
+  }
+  return queues;
+}
 
 /**
  * Add an extraction job to the queue.
  */
 export async function queueExtraction(
   data: ExtractionJobData,
-  eventId: bigint | number
+  eventId: bigint | number,
 ): Promise<void> {
-  await extractionQueue.add('extract', data, {
+  const { extraction } = getQueues();
+  await extraction.add('extract', data, {
     jobId: `outbox_${eventId}`, // Idempotency via unique job ID
   });
 }
@@ -148,9 +168,10 @@ export async function queueExtraction(
  */
 export async function queueAnomalyDetection(
   data: AnomalyDetectionJobData,
-  eventId: bigint | number
+  eventId: bigint | number,
 ): Promise<void> {
-  await anomalyQueue.add('detect', data, {
+  const { anomalyDetection } = getQueues();
+  await anomalyDetection.add('detect', data, {
     jobId: `outbox_${eventId}`,
   });
 }
@@ -158,11 +179,9 @@ export async function queueAnomalyDetection(
 /**
  * Add an alert job to the queue.
  */
-export async function queueAlert(
-  data: AlertJobData,
-  eventId: bigint | number
-): Promise<void> {
-  await alertQueue.add('send', data, {
+export async function queueAlert(data: AlertJobData, eventId: bigint | number): Promise<void> {
+  const { alerts } = getQueues();
+  await alerts.add('send', data, {
     jobId: `outbox_${eventId}`,
   });
 }
@@ -172,9 +191,10 @@ export async function queueAlert(
  */
 export async function queueAggregation(
   data: AggregationJobData,
-  eventId: bigint | number
+  eventId: bigint | number,
 ): Promise<void> {
-  await aggregationQueue.add('aggregate', data, {
+  const { aggregation } = getQueues();
+  await aggregation.add('aggregate', data, {
     jobId: `outbox_${eventId}`,
   });
 }
@@ -188,8 +208,22 @@ export async function getQueueStats(queueName: string): Promise<{
   completed: number;
   failed: number;
 }> {
-  const queue =
-    queueName === QUEUE_NAMES.EXTRACTION ? extractionQueue : anomalyQueue;
+  const { extraction, anomalyDetection, alerts, aggregation } = getQueues();
+
+  const queue = (() => {
+    switch (queueName) {
+      case QUEUE_NAMES.EXTRACTION:
+        return extraction;
+      case QUEUE_NAMES.ANOMALY_DETECTION:
+        return anomalyDetection;
+      case QUEUE_NAMES.ALERTS:
+        return alerts;
+      case QUEUE_NAMES.AGGREGATION:
+        return aggregation;
+      default:
+        throw new Error(`Unknown queue: ${queueName}`);
+    }
+  })();
 
   const [waiting, active, completed, failed] = await Promise.all([
     queue.getWaitingCount(),
@@ -205,10 +239,13 @@ export async function getQueueStats(queueName: string): Promise<{
  * Close all queue connections.
  */
 export async function closeQueues(): Promise<void> {
+  if (!queues) return;
+
   await Promise.all([
-    extractionQueue.close(),
-    anomalyQueue.close(),
-    alertQueue.close(),
-    aggregationQueue.close(),
+    queues.extraction.close(),
+    queues.anomalyDetection.close(),
+    queues.alerts.close(),
+    queues.aggregation.close(),
   ]);
+  queues = null;
 }

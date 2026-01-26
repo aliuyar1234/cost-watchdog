@@ -2,6 +2,8 @@ import type { FastifyRequest, FastifyReply, FastifyInstance, preHandlerHookHandl
 import fp from 'fastify-plugin';
 import { verifyToken, type AuthPayload } from '../lib/auth.js';
 import { isTokenBlacklisted } from '../lib/redis.js';
+import { isSessionBlacklisted, updateSessionActivity } from '../lib/sessions.js';
+import { isUserBlacklisted } from '../lib/account-lockout.js';
 
 /**
  * Extend FastifyRequest to include authenticated user data.
@@ -47,7 +49,7 @@ export function extractToken(request: FastifyRequest): string | null {
  */
 export const authenticate: preHandlerHookHandler = async (
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ): Promise<void> => {
   // Allow API key authenticated requests to pass through
   if (request.user?.role === 'api') {
@@ -84,6 +86,37 @@ export const authenticate: preHandlerHookHandler = async (
     return;
   }
 
+  if (!payload.sub || typeof payload.iat !== 'number') {
+    reply.code(401).send({
+      error: 'Unauthorized',
+      message: 'Invalid or expired token',
+    });
+    return;
+  }
+
+  const userBlacklisted = await isUserBlacklisted(payload.sub, payload.iat);
+  if (userBlacklisted) {
+    reply.code(401).send({
+      error: 'Unauthorized',
+      message: 'User access has been revoked. Please log in again.',
+    });
+    return;
+  }
+
+  if (payload.jti) {
+    const sessionBlacklisted = await isSessionBlacklisted(payload.jti);
+    if (sessionBlacklisted) {
+      reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Session has been terminated',
+      });
+      return;
+    }
+    updateSessionActivity(payload.jti).catch(() => {
+      // Ignore session update failures to avoid blocking requests
+    });
+  }
+
   request.user = payload;
 };
 
@@ -94,15 +127,41 @@ export const authenticate: preHandlerHookHandler = async (
  * @param request - Fastify request
  */
 export const optionalAuthenticate: preHandlerHookHandler = async (
-  request: FastifyRequest
+  request: FastifyRequest,
 ): Promise<void> => {
   const token = extractToken(request);
 
   if (token) {
-    const payload = await verifyToken(token);
-    if (payload) {
-      request.user = payload;
+    const blacklisted = await isTokenBlacklisted(token);
+    if (blacklisted) {
+      return;
     }
+
+    const payload = await verifyToken(token);
+    if (!payload) {
+      return;
+    }
+
+    if (!payload.sub || typeof payload.iat !== 'number') {
+      return;
+    }
+
+    const userBlacklisted = await isUserBlacklisted(payload.sub, payload.iat);
+    if (userBlacklisted) {
+      return;
+    }
+
+    if (payload.jti) {
+      const sessionBlacklisted = await isSessionBlacklisted(payload.jti);
+      if (sessionBlacklisted) {
+        return;
+      }
+      updateSessionActivity(payload.jti).catch(() => {
+        // Ignore session update failures to avoid blocking requests
+      });
+    }
+
+    request.user = payload;
   }
 };
 

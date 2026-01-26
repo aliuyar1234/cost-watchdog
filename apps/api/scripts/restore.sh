@@ -97,7 +97,7 @@ fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════════════╗"
-echo "║                        ⚠️  WARNING ⚠️                                  ║"
+echo "║                          WARNING                                      ║"
 echo "╠══════════════════════════════════════════════════════════════════════╣"
 echo "║  This will REPLACE ALL DATA in the database with the backup.        ║"
 echo "║  This action cannot be undone.                                       ║"
@@ -176,11 +176,11 @@ fi
 # ───────────────────────────────────────────────────────────────────────────
 
 log "╔══════════════════════════════════════════════════════════════════════╗"
-log "║                     ✅ RESTORE COMPLETE ✅                            ║"
+log "║                      RESTORE COMPLETE                                 ║"
 log "╚══════════════════════════════════════════════════════════════════════╝"
 log ""
 log "Backup restored: ${BACKUP_FILE}"
 log ""
-log "⚠️  IMPORTANT: Restart the application to ensure all caches are cleared."
+log "IMPORTANT: Restart the application to ensure all caches are cleared."
 
 exit 0

@@ -1,6 +1,6 @@
 # Security Features
 
-Cost Watchdog implements enterprise-grade security measures across all layers of the application. This document provides a comprehensive overview of the security features available.
+Cost Watchdog includes security-focused defaults across the application. This document describes what is implemented in the current codebase (it is not a compliance certification).
 
 ---
 
@@ -27,13 +27,13 @@ Cost Watchdog implements enterprise-grade security measures across all layers of
 
 Cost Watchdog implements a comprehensive RBAC system with five distinct roles:
 
-| Role | Permissions |
-|------|-------------|
-| **Admin** | Full system access, user management, audit logs, all features |
-| **Manager** | Document management, anomaly handling, analytics, exports |
-| **Analyst** | View documents, acknowledge anomalies, analytics, exports |
-| **Viewer** | Read-only access to dashboards and reports |
-| **Auditor** | Read-only access including audit logs for compliance |
+| Role        | Permissions                                                   |
+| ----------- | ------------------------------------------------------------- |
+| **Admin**   | Full system access, user management, audit logs, all features |
+| **Manager** | Document management, anomaly handling, analytics, exports     |
+| **Analyst** | View documents, acknowledge anomalies, analytics, exports     |
+| **Viewer**  | Read-only access to dashboards and reports                    |
+| **Auditor** | Read-only access including audit logs for compliance          |
 
 ### JWT Token Security
 
@@ -46,24 +46,21 @@ Cost Watchdog implements a comprehensive RBAC system with five distinct roles:
 
 Protects against brute-force attacks:
 
-```
-Configuration:
-- Max attempts: 5 (configurable)
-- Lockout duration: 15 minutes (configurable)
-- Progressive delays after failed attempts
-```
+- Defaults:
+  - Max attempts: 5
+  - Attempt window: 15 minutes
+  - Initial lockout: 15 minutes (progressive lockout for repeat offenders)
 
 ### Password Policy
 
-Strong password requirements enforced:
+Strong password requirements enforced (defaults):
 
-- Minimum 12 characters (configurable)
+- Minimum 12 characters
 - At least 1 uppercase letter
 - At least 1 lowercase letter
 - At least 1 number
 - At least 1 special character
-- Password history tracking (prevents reuse of last 5 passwords)
-- Breached password detection via Have I Been Pwned API
+- Note: password history tracking / breached-password checks are not implemented yet.
 
 ---
 
@@ -75,7 +72,7 @@ For machine-to-machine communication:
 
 - **Scoped permissions**: `read`, `write`, `delete`, `admin`
 - **Resource-specific scopes**: `documents:read`, `anomalies:write`, etc.
-- **Automatic key hashing** with bcrypt
+- **Automatic key hashing** with SHA-256 (no plaintext keys stored)
 - **Key rotation support** without downtime
 - **Audit trail** for all API key operations
 
@@ -107,13 +104,15 @@ Sensitive data encrypted at rest using AES-256-GCM:
 
 ```typescript
 Encrypted Fields:
-- Invoice numbers
 - Contract numbers
+- Customer numbers
+- Meter numbers
 - MFA secrets
 - Backup codes
 ```
 
 Features:
+
 - **Key versioning** for rotation support
 - **Automatic re-encryption** when keys rotate
 - **Transparent encryption/decryption** via Prisma middleware
@@ -123,14 +122,14 @@ Features:
 
 Automatic redaction of sensitive data in logs:
 
-| Data Type | Redaction Pattern |
-|-----------|-------------------|
-| Passwords | `[REDACTED]` |
-| Tokens | `Bearer [REDACTED]` |
-| API Keys | `[REDACTED]` |
-| Email addresses | `j***@example.com` |
-| MFA codes | `[REDACTED]` |
-| Cookies | `[REDACTED]` |
+| Data Type       | Redaction Pattern   |
+| --------------- | ------------------- |
+| Passwords       | `[REDACTED]`        |
+| Tokens          | `Bearer [REDACTED]` |
+| API Keys        | `[REDACTED]`        |
+| Email addresses | `j***@example.com`  |
+| MFA codes       | `[REDACTED]`        |
+| Cookies         | `[REDACTED]`        |
 
 ### Database Security
 
@@ -147,7 +146,7 @@ Automatic redaction of sensitive data in logs:
 
 - New session ID generated on authentication state changes
 - Old session tokens invalidated on privilege escalation
-- Session binding to user agent and IP (configurable)
+- Session metadata recorded (IP address + user agent)
 
 ### Active Session Management
 
@@ -160,6 +159,7 @@ DELETE /api/v1/users/me/sessions      # Revoke all sessions
 ```
 
 Session information includes:
+
 - Device/browser information
 - IP address (privacy-compliant)
 - Last activity timestamp
@@ -218,14 +218,14 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 All security-relevant actions are logged:
 
-| Category | Events Logged |
-|----------|---------------|
-| **Authentication** | Login, logout, failed attempts, MFA events |
-| **Authorization** | Permission changes, role assignments |
-| **Data Access** | Document views, exports, downloads |
-| **Data Modification** | Create, update, delete operations |
-| **Admin Actions** | User management, settings changes |
-| **Security Events** | Password changes, API key operations |
+| Category              | Events Logged                              |
+| --------------------- | ------------------------------------------ |
+| **Authentication**    | Login, logout, failed attempts, MFA events |
+| **Authorization**     | Permission changes, role assignments       |
+| **Data Access**       | Document views, exports, downloads         |
+| **Data Modification** | Create, update, delete operations          |
+| **Admin Actions**     | User management, settings changes          |
+| **Security Events**   | Password changes, API key operations       |
 
 ### Audit Log Structure
 
@@ -257,14 +257,14 @@ All security-relevant actions are logged:
 
 ### Sliding Window Rate Limiting
 
-Redis-backed rate limiting with configurable limits:
+Redis-backed rate limiting with default limits:
 
-| Endpoint Category | Requests | Window |
-|-------------------|----------|--------|
-| **Authentication** | 5 | 15 minutes |
-| **Password Reset** | 3 | 1 hour |
-| **API (default)** | 100 | 1 minute |
-| **Uploads** | 10 | 1 minute |
+| Endpoint Category  | Requests | Window     |
+| ------------------ | -------- | ---------- |
+| **Authentication** | 5        | 15 minutes |
+| **Password Reset** | 3        | 1 hour     |
+| **API (default)**  | 100      | 1 minute   |
+| **Uploads**        | 10       | 1 minute   |
 
 ### Rate Limit Response
 
@@ -280,7 +280,7 @@ X-RateLimit-Reset: 1702209600
 
 ### Fail-Closed Behavior
 
-If Redis is unavailable, requests are blocked rather than allowed (configurable):
+If Redis is unavailable, requests are blocked rather than allowed in production:
 
 ```typescript
 rateLimitConfig: {
@@ -300,7 +300,7 @@ Multi-layer validation for all uploads:
 1. **Extension whitelist**: `.pdf`, `.xlsx`, `.xls`, `.csv`
 2. **MIME type validation**: Must match allowed content types
 3. **Magic byte verification**: Actual file content inspection
-4. **Size limits**: 10MB default (configurable)
+4. **Size limits**: 10MB default
 5. **Filename sanitization**: Remove path traversal, special characters
 
 ### Malware Protection
@@ -358,42 +358,50 @@ GET  /api/v1/mfa/status         # Check MFA status
 Full support for GDPR data subject rights:
 
 #### Right to Access (Art. 15)
+
 ```
 GET /api/v1/users/me/data-export
 ```
+
 Returns all personal data in machine-readable JSON format.
 
 #### Right to Erasure (Art. 17)
+
 ```
 POST /api/v1/users/me/deletion-request
 ```
+
 Triggers account deletion workflow with:
+
 - Confirmation email with secure token
 - 24-hour cooling-off period
 - Cascading deletion of all related data
 - Audit log preserved (anonymized)
 
 #### Right to Rectification (Art. 16)
+
 ```
 PATCH /api/v1/users/me
 ```
+
 Users can update their personal information.
 
 ### Data Retention
 
 Configurable retention periods with automatic cleanup:
 
-| Data Type | Default Retention |
-|-----------|-------------------|
-| Audit logs | 365 days |
-| Login attempts | 90 days |
-| Password reset tokens | 7 days |
-| Processed outbox events | 30 days |
-| Token blacklist entries | Until expiry |
+| Data Type               | Default Retention |
+| ----------------------- | ----------------- |
+| Audit logs              | 365 days          |
+| Login attempts          | 90 days           |
+| Password reset tokens   | 7 days            |
+| Processed outbox events | 30 days           |
+| Token blacklist entries | Until expiry      |
 
 ### Anonymization
 
 When deletion is requested:
+
 - Personal identifiers replaced with anonymized values
 - Email: `deleted-{hash}@deleted.local`
 - Name: `Deleted User`
@@ -449,16 +457,16 @@ secrets:
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AUTH_SECRET` | JWT signing secret | Required in production |
-| `COOKIE_SECRET` | Cookie signing secret | Required in production |
-| `FIELD_ENCRYPTION_KEY` | AES-256 encryption key | Required in production |
-| `PASSWORD_MIN_LENGTH` | Minimum password length | 12 |
-| `LOCKOUT_MAX_ATTEMPTS` | Failed attempts before lockout | 5 |
-| `LOCKOUT_DURATION_MINUTES` | Lockout duration | 15 |
-| `RATE_LIMIT_DEFAULT` | Default rate limit | 100/minute |
-| `MFA_REQUIRED` | Require MFA for all users | false |
+| Variable                   | Description                    | Default                |
+| -------------------------- | ------------------------------ | ---------------------- |
+| `AUTH_SECRET`              | JWT signing secret             | Required in production |
+| `COOKIE_SECRET`            | Cookie signing secret          | Required in production |
+| `FIELD_ENCRYPTION_KEY`     | AES-256 encryption key         | Required in production |
+| `PASSWORD_MIN_LENGTH`      | Minimum password length        | 12                     |
+| `LOCKOUT_MAX_ATTEMPTS`     | Failed attempts before lockout | 5                      |
+| `LOCKOUT_DURATION_MINUTES` | Lockout duration               | 15                     |
+| `RATE_LIMIT_DEFAULT`       | Default rate limit             | 100/minute             |
+| `MFA_REQUIRED`             | Require MFA for all users      | false                  |
 
 ### Production Checklist
 

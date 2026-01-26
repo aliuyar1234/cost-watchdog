@@ -65,13 +65,15 @@ describe('Request ID Tracking', () => {
 
   describe('extractOrGenerateRequestId', () => {
     it('should extract valid X-Request-ID header', () => {
-      const headers = { 'x-request-id': '550e8400-e29b-41d4-a716-446655440000' };
+      const headers = { [REQUEST_ID_HEADER]: '550e8400-e29b-41d4-a716-446655440000' };
       const id = extractOrGenerateRequestId(headers);
       expect(id).toBe('550e8400-e29b-41d4-a716-446655440000');
     });
 
     it('should handle array header value', () => {
-      const headers = { 'x-request-id': ['550e8400-e29b-41d4-a716-446655440000', 'ignored'] };
+      const headers = {
+        [REQUEST_ID_HEADER]: ['550e8400-e29b-41d4-a716-446655440000', 'ignored'],
+      };
       const id = extractOrGenerateRequestId(headers);
       expect(id).toBe('550e8400-e29b-41d4-a716-446655440000');
     });
@@ -83,7 +85,7 @@ describe('Request ID Tracking', () => {
     });
 
     it('should generate new ID for invalid header', () => {
-      const headers = { 'x-request-id': 'invalid!@#$' };
+      const headers = { [REQUEST_ID_HEADER]: 'invalid!@#$' };
       const id = extractOrGenerateRequestId(headers);
       expect(id).not.toBe('invalid!@#$');
       expect(isValidRequestId(id)).toBe(true);
@@ -98,7 +100,7 @@ describe('Request ID Tracking', () => {
       await app.register(requestContextPlugin);
 
       // Test route that returns request context
-      app.get('/test', async (request, reply) => {
+      app.get('/test', async (request) => {
         return {
           requestId: request.requestContext?.requestId,
           ipAddress: request.requestContext?.ipAddress,
@@ -131,7 +133,7 @@ describe('Request ID Tracking', () => {
         method: 'GET',
         url: '/test',
         headers: {
-          'x-request-id': incomingId,
+          [REQUEST_ID_HEADER]: incomingId,
         },
       });
 
@@ -142,7 +144,7 @@ describe('Request ID Tracking', () => {
       expect(body.requestId).toBe(incomingId);
     });
 
-    it('should populate request context with IP address', async () => {
+    it('should populate request context with Fastify-derived IP address', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/test',
@@ -152,7 +154,7 @@ describe('Request ID Tracking', () => {
       });
 
       const body = JSON.parse(response.payload);
-      expect(body.ipAddress).toBe('192.168.1.100');
+      expect(body.ipAddress).toBe('127.0.0.1');
     });
 
     it('should populate request context with user agent', async () => {
@@ -169,7 +171,7 @@ describe('Request ID Tracking', () => {
       expect(body.userAgent).toBe(userAgent);
     });
 
-    it('should use X-Real-IP when X-Forwarded-For is missing', async () => {
+    it('should not trust X-Real-IP when trustProxy is not enabled', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/test',
@@ -179,7 +181,7 @@ describe('Request ID Tracking', () => {
       });
 
       const body = JSON.parse(response.payload);
-      expect(body.ipAddress).toBe('203.0.113.50');
+      expect(body.ipAddress).toBe('127.0.0.1');
     });
   });
 

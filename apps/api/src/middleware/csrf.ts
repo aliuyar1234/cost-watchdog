@@ -15,6 +15,7 @@ import {
   requiresCsrfProtection,
   getCsrfCookieOptions,
 } from '../lib/csrf.js';
+import { secrets } from '../lib/secrets.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EXTEND FASTIFY TYPES
@@ -67,11 +68,8 @@ export interface CsrfOptions {
 // MIDDLEWARE
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function csrfMiddleware(
-  fastify: FastifyInstance,
-  options: CsrfOptions = {}
-): Promise<void> {
-  const secret = options.secret || process.env['AUTH_SECRET'];
+async function csrfMiddleware(fastify: FastifyInstance, options: CsrfOptions = {}): Promise<void> {
+  const secret = options.secret || secrets.getAuthSecret();
   if (!secret) {
     throw new Error('CSRF middleware requires a secret (AUTH_SECRET or options.secret)');
   }
@@ -96,41 +94,44 @@ async function csrfMiddleware(
   });
 
   // Validate CSRF on state-changing requests
-  fastify.addHook(
-    'preHandler',
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      // Skip for safe methods
-      if (!requiresCsrfProtection(request.method)) {
-        return;
-      }
-
-      // Skip for ignored paths
-      const path = request.url.split('?')[0] || '';
-      if (ignorePaths.some((p) => path.startsWith(p))) {
-        return;
-      }
-
-      // Skip for API key authenticated requests
-      if (skipForApiKey && request.isApiKeyAuth) {
-        return;
-      }
-
-      // Get tokens
-      const cookieToken = request.cookies?.[CSRF_COOKIE_NAME];
-      const headerToken = request.headers[CSRF_HEADER_NAME] as string | undefined;
-
-      // Validate
-      const result = validateCsrfToken(cookieToken, headerToken, secret);
-
-      if (!result.valid) {
-        request.log.warn({ reason: result.reason }, 'CSRF validation failed');
-        return reply.code(403).send({
-          error: 'Forbidden',
-          message: result.reason || 'CSRF validation failed',
-        });
-      }
+  fastify.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Skip for safe methods
+    if (!requiresCsrfProtection(request.method)) {
+      return;
     }
-  );
+
+    const path = request.url.split('?')[0] || '';
+
+    // Skip for alert tracking endpoints (HMAC token auth, no CSRF cookie)
+    if (/\/alerts\/[^/]+\/track-click$/.test(path)) {
+      return;
+    }
+
+    // Skip for ignored paths
+    if (ignorePaths.some((p) => path.startsWith(p))) {
+      return;
+    }
+
+    // Skip for API key authenticated requests
+    if (skipForApiKey && request.isApiKeyAuth) {
+      return;
+    }
+
+    // Get tokens
+    const cookieToken = request.cookies?.[CSRF_COOKIE_NAME];
+    const headerToken = request.headers[CSRF_HEADER_NAME] as string | undefined;
+
+    // Validate
+    const result = validateCsrfToken(cookieToken, headerToken, secret);
+
+    if (!result.valid) {
+      request.log.warn({ reason: result.reason }, 'CSRF validation failed');
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: result.reason || 'CSRF validation failed',
+      });
+    }
+  });
 }
 
 export default fp(csrfMiddleware, {

@@ -7,6 +7,7 @@
 
 import { prisma } from './db.js';
 import { z } from 'zod';
+import { auditLogsTotal, accountLockoutsTotal, failedLoginAttemptsTotal } from './metrics.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -129,6 +130,20 @@ export async function logAuditEvent(input: AuditLogInput): Promise<AuditLogEntry
     },
   });
 
+  auditLogsTotal.labels(input.action, input.entityType).inc();
+
+  if (input.action === 'login_failed') {
+    const reason =
+      input.metadata && typeof input.metadata['reason'] === 'string'
+        ? (input.metadata['reason'] as string)
+        : 'unknown';
+    failedLoginAttemptsTotal.labels(reason).inc();
+  }
+
+  if (input.action === 'account_lock') {
+    accountLockoutsTotal.inc();
+  }
+
   return entry as AuditLogEntry;
 }
 
@@ -207,7 +222,7 @@ export async function getAuditLogById(id: string): Promise<AuditLogEntry | null>
  */
 export function calculateChanges(
   before: Record<string, unknown> | null | undefined,
-  after: Record<string, unknown> | null | undefined
+  after: Record<string, unknown> | null | undefined,
 ): Record<string, { from: unknown; to: unknown }> | null {
   if (!before || !after) return null;
 

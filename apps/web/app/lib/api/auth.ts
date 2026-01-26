@@ -24,8 +24,8 @@ export interface AuthResponse {
     lastName: string;
     role: string;
   };
-  accessToken: string;
-  refreshToken: string;
+  accessToken?: string;
+  refreshToken?: string;
 }
 
 export interface User {
@@ -51,7 +51,7 @@ export const authApi = {
     }),
 
   refresh: (refreshToken: string) =>
-    fetchApi<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
+    fetchApi<{ sessionId?: string; accessToken?: string; refreshToken?: string }>('/auth/refresh', {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),
     }),

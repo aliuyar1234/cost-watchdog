@@ -1,0 +1,64 @@
+# =============================================================================
+# Cost Watchdog - Observability Stack (Example)
+# =============================================================================
+# Prometheus scrapes the API's `/metrics` endpoint.
+# Grafana provides dashboards and can query Prometheus (and Loki if enabled).
+#
+# Notes:
+# - Prometheus uses `host.docker.internal:3001` by default (works on Docker Desktop).
+#   On Linux, adjust the target to your host IP or run the API in Docker.
+# - Loki/Promtail are optional. Enable with `--profile logs`.
+# =============================================================================
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.49.1
+    container_name: cost-watchdog-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - '127.0.0.1:9090:9090'
+
+  grafana:
+    image: grafana/grafana:10.3.1
+    container_name: cost-watchdog-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - '127.0.0.1:3005:3000'
+    depends_on:
+      - prometheus
+
+  loki:
+    profiles: ['logs']
+    image: grafana/loki:2.9.3
+    container_name: cost-watchdog-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./observability/loki.yml:/etc/loki/config.yml:ro
+    ports:
+      - '127.0.0.1:3100:3100'
+
+  promtail:
+    profiles: ['logs']
+    image: grafana/promtail:2.9.3
+    container_name: cost-watchdog-promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./observability/promtail.yml:/etc/promtail/config.yml:ro
+      # Works best on Linux. On Docker Desktop, container log paths may differ.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+    depends_on:
+      - loki
+
+volumes:
+  grafana_data:

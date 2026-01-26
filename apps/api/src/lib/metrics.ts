@@ -98,15 +98,6 @@ export const accountLockoutsTotal = new client.Counter({
 });
 
 /**
- * Active sessions gauge
- */
-export const activeSessionsGauge = new client.Gauge({
-  name: 'active_sessions',
-  help: 'Number of active user sessions',
-  registers: [register],
-});
-
-/**
  * Anomalies detected counter
  */
 export const anomaliesDetectedTotal = new client.Counter({
@@ -148,16 +139,6 @@ export const dbQueryDuration = new client.Histogram({
   help: 'Database query duration in seconds',
   labelNames: ['operation'] as const,
   buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5],
-  registers: [register],
-});
-
-/**
- * Database connection pool gauge
- */
-export const dbConnectionPool = new client.Gauge({
-  name: 'db_connection_pool_size',
-  help: 'Database connection pool size',
-  labelNames: ['state'] as const,
   registers: [register],
 });
 
@@ -221,7 +202,7 @@ export function normalizePath(path: string): string {
   // Replace UUIDs with placeholder
   const normalizedPath = basePath.replace(
     /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-    ':id'
+    ':id',
   );
 
   // Replace numeric IDs with placeholder
@@ -237,7 +218,7 @@ export function recordHttpRequest(
   status: number,
   durationMs: number,
   requestSize?: number,
-  responseSize?: number
+  responseSize?: number,
 ): void {
   const normalizedPath = normalizePath(path);
   const statusStr = status.toString();

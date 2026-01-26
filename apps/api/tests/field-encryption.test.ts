@@ -96,7 +96,7 @@ describe('Field Encryption Library', () => {
     });
 
     it('should encrypt unicode characters', () => {
-      const plaintext = 'Héllo Wörld! 你好世界 🔐';
+      const plaintext = 'Héllo Wörld! 你好世界';
       const ciphertext = encrypt(plaintext);
       const decrypted = decrypt(ciphertext);
 

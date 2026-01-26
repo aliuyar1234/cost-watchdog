@@ -37,20 +37,21 @@ export type ComparisonType = z.infer<typeof comparisonTypeSchema>;
 // COST TREND ANALYSIS
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const costTrendSchema = z.object({
-  startDate: dateSchema,
-  endDate: dateSchema,
-  granularity: timeGranularitySchema.default('month'),
-  locationIds: z.array(uuidSchema).optional(),
-  costCenterIds: z.array(uuidSchema).optional(),
-  supplierIds: z.array(uuidSchema).optional(),
-  costTypes: z.array(z.string()).optional(),
-  groupBy: z.enum(['location', 'supplier', 'costType', 'costCenter', 'none']).default('none'),
-  comparison: comparisonTypeSchema.optional(),
-}).refine(
-  (data) => data.startDate <= data.endDate,
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const costTrendSchema = z
+  .object({
+    startDate: dateSchema,
+    endDate: dateSchema,
+    granularity: timeGranularitySchema.default('month'),
+    locationIds: z.array(uuidSchema).optional(),
+    costCenterIds: z.array(uuidSchema).optional(),
+    supplierIds: z.array(uuidSchema).optional(),
+    costTypes: z.array(z.string()).optional(),
+    groupBy: z.enum(['location', 'supplier', 'costType', 'costCenter', 'none']).default('none'),
+    comparison: comparisonTypeSchema.optional(),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: 'startDate must be before or equal to endDate',
+  });
 
 export type CostTrendInput = z.infer<typeof costTrendSchema>;
 
@@ -58,19 +59,20 @@ export type CostTrendInput = z.infer<typeof costTrendSchema>;
 // COST BREAKDOWN
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const costBreakdownSchema = z.object({
-  startDate: dateSchema,
-  endDate: dateSchema,
-  groupBy: z.enum(['location', 'supplier', 'costType', 'costCenter']),
-  locationIds: z.array(uuidSchema).optional(),
-  costCenterIds: z.array(uuidSchema).optional(),
-  supplierIds: z.array(uuidSchema).optional(),
-  costTypes: z.array(z.string()).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
-}).refine(
-  (data) => data.startDate <= data.endDate,
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const costBreakdownSchema = z
+  .object({
+    startDate: dateSchema,
+    endDate: dateSchema,
+    groupBy: z.enum(['location', 'supplier', 'costType', 'costCenter']),
+    locationIds: z.array(uuidSchema).optional(),
+    costCenterIds: z.array(uuidSchema).optional(),
+    supplierIds: z.array(uuidSchema).optional(),
+    costTypes: z.array(z.string()).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: 'startDate must be before or equal to endDate',
+  });
 
 export type CostBreakdownInput = z.infer<typeof costBreakdownSchema>;
 
@@ -105,23 +107,28 @@ export type AnomalySummaryInput = z.infer<typeof anomalySummarySchema>;
 // SUPPLIER ANALYSIS
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const supplierAnalysisSchema = z.object({
-  startDate: dateSchema,
-  endDate: dateSchema,
-  supplierIds: z.array(uuidSchema).optional(),
-  locationIds: z.array(uuidSchema).optional(),
-  costTypes: z.array(z.string()).optional(),
-  metrics: z.array(z.enum([
-    'total_spend',
-    'invoice_count',
-    'avg_invoice_value',
-    'payment_terms',
-    'anomaly_rate',
-  ])).default(['total_spend', 'invoice_count']),
-}).refine(
-  (data) => data.startDate <= data.endDate,
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const supplierAnalysisSchema = z
+  .object({
+    startDate: dateSchema,
+    endDate: dateSchema,
+    supplierIds: z.array(uuidSchema).optional(),
+    locationIds: z.array(uuidSchema).optional(),
+    costTypes: z.array(z.string()).optional(),
+    metrics: z
+      .array(
+        z.enum([
+          'total_spend',
+          'invoice_count',
+          'avg_invoice_value',
+          'payment_terms',
+          'anomaly_rate',
+        ]),
+      )
+      .default(['total_spend', 'invoice_count']),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: 'startDate must be before or equal to endDate',
+  });
 
 export type SupplierAnalysisInput = z.infer<typeof supplierAnalysisSchema>;
 
@@ -129,15 +136,16 @@ export type SupplierAnalysisInput = z.infer<typeof supplierAnalysisSchema>;
 // LOCATION COMPARISON
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const locationComparisonSchema = z.object({
-  startDate: dateSchema,
-  endDate: dateSchema,
-  locationIds: z.array(uuidSchema).min(2, 'At least 2 locations required for comparison'),
-  costTypes: z.array(z.string()).optional(),
-  metric: z.enum(['total', 'per_sqm', 'per_employee', 'per_unit']).default('total'),
-}).refine(
-  (data) => data.startDate <= data.endDate,
-  { message: 'startDate must be before or equal to endDate' }
-);
+export const locationComparisonSchema = z
+  .object({
+    startDate: dateSchema,
+    endDate: dateSchema,
+    locationIds: z.array(uuidSchema).min(2, 'At least 2 locations required for comparison'),
+    costTypes: z.array(z.string()).optional(),
+    metric: z.enum(['total', 'per_sqm', 'per_employee', 'per_unit']).default('total'),
+  })
+  .refine((data) => data.startDate <= data.endDate, {
+    message: 'startDate must be before or equal to endDate',
+  });
 
 export type LocationComparisonInput = z.infer<typeof locationComparisonSchema>;

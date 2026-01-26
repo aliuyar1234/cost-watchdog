@@ -56,7 +56,7 @@ export const usersApi = {
       isActive?: boolean;
       allowedLocationIds?: string[];
       allowedCostCenterIds?: string[];
-    }
+    },
   ) =>
     fetchApi<UserDetails>(`/users/${id}`, {
       method: 'PATCH',

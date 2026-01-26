@@ -83,18 +83,22 @@ describe('Worker idempotency', () => {
     });
 
     // Run the worker twice
-    await processAnomalyDetection({ data: { costRecordId: current.id } } as any);
-    await processAnomalyDetection({ data: { costRecordId: current.id } } as any);
+    const job = {
+      data: { costRecordId: current.id },
+    } as unknown as Parameters<typeof processAnomalyDetection>[0];
+
+    await processAnomalyDetection(job);
+    await processAnomalyDetection(job);
 
     const anomalies = await prisma.anomaly.findMany({
-      where: { costRecordId: current.id }
+      where: { costRecordId: current.id },
     });
 
     // Should have detected YoY deviation anomaly, and upsert ensures only one exists
     expect(anomalies.length).toBeGreaterThanOrEqual(1);
 
     // Check for YoY deviation specifically
-    const yoyAnomaly = anomalies.find(a => a.type === 'yoy_deviation');
+    const yoyAnomaly = anomalies.find((a) => a.type === 'yoy_deviation');
     expect(yoyAnomaly).toBeDefined();
     expect(yoyAnomaly?.severity).toBeTruthy();
   });

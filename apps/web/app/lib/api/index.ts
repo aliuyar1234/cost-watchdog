@@ -22,16 +22,7 @@ export type { Anomaly, AnomaliesResponse, AnomalyStats } from './anomalies';
 
 // Analytics API
 export { analyticsApi } from './analytics';
-export type {
-  DashboardData,
-  TrendDataPoint,
-  BreakdownItem,
-  ComparisonData,
-} from './analytics';
-
-// Exports API
-export { exportsApi } from './exports';
-export type { MonthlyReport } from './exports';
+export type { DashboardData, TrendDataPoint, BreakdownItem, ComparisonData } from './analytics';
 
 // Users API
 export { usersApi } from './users';
@@ -39,7 +30,12 @@ export type { UserDetails, UsersResponse } from './users';
 
 // Settings API
 export { settingsApi } from './settings';
-export type { AlertSettings, ThresholdSettings, GeneralSettings, SettingsResponse } from './settings';
+export type {
+  AlertSettings,
+  ThresholdSettings,
+  GeneralSettings,
+  SettingsResponse,
+} from './settings';
 
 // Notification settings API
 export { notificationSettingsApi } from './notification-settings';
