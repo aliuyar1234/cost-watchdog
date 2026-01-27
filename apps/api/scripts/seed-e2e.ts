@@ -82,6 +82,28 @@ async function seedDocument(userId: string) {
   });
 }
 
+async function seedDocumentsForPagination(userId: string, count: number) {
+  const documents = Array.from({ length: count }, (_, idx) => {
+    const basename = `seeded-document-${String(idx + 1).padStart(2, '0')}.pdf`;
+    return {
+      filename: basename,
+      originalFilename: basename,
+      mimeType: 'application/pdf',
+      fileSize: 1024,
+      fileHash: `e2e-${randomUUID()}`,
+      storagePath: `documents/e2e/${randomUUID()}.pdf`,
+      extractionStatus: 'pending',
+      verificationStatus: 'pending',
+      uploadedBy: userId,
+      costTypes: [],
+    };
+  });
+
+  await prisma.document.createMany({
+    data: documents,
+  });
+}
+
 async function seedCostRecord(args: {
   supplierId: string;
   locationId: string;
@@ -130,6 +152,7 @@ async function main() {
   const user = await ensureAdminUser(email, password);
 
   const document = await seedDocument(user.id);
+  await seedDocumentsForPagination(user.id, 30);
   const costRecord = await seedCostRecord({
     supplierId: supplier.id,
     locationId: location.id,
