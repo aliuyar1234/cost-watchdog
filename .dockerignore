@@ -1,0 +1,22 @@
+# Dependencies
+**/node_modules
+
+# Build outputs
+**/dist
+**/.next
+**/.turbo
+
+# VCS
+.git
+.github
+
+# Local env / secrets
+.env*
+
+# OS / editor
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*

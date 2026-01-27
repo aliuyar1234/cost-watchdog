@@ -18,7 +18,7 @@ RUN corepack enable && corepack prepare pnpm@8 --activate
 WORKDIR /app
 
 # Copy workspace files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.json ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/core/package.json ./packages/core/
 COPY packages/ui/package.json ./packages/ui/
@@ -27,15 +27,20 @@ COPY packages/ui/package.json ./packages/ui/
 RUN pnpm install --frozen-lockfile
 
 # Copy source
-COPY packages/ ./packages/
+COPY packages/core/ ./packages/core/
+COPY packages/ui/ ./packages/ui/
 COPY apps/web/ ./apps/web/
 
 # Build-time public API base URL (baked into client bundle)
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+# Produce Next.js standalone output for container runtime.
+ENV NEXT_OUTPUT=standalone
+ENV NEXT_TELEMETRY_DISABLED=1
+
 # Build (Next.js standalone output includes only production deps)
-RUN pnpm --filter @cost-watchdog/web build
+RUN pnpm --filter @cost-watchdog/web... build
 
 # Production stage
 FROM node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081d2f60fd7d5d430e9c AS runner
@@ -58,7 +63,6 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # Copy standalone build (already optimized by Next.js)
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=builder /app/apps/web/public ./apps/web/public
 
 # Set ownership to non-root user
 RUN chown -R nextjs:nodejs /app

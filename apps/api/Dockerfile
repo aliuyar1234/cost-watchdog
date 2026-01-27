@@ -18,7 +18,7 @@ RUN corepack enable && corepack prepare pnpm@8 --activate
 WORKDIR /app
 
 # Copy workspace files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/core/package.json ./packages/core/
 COPY packages/connector-sdk/package.json ./packages/connector-sdk/
@@ -28,16 +28,15 @@ COPY packages/connectors/package.json ./packages/connectors/
 RUN pnpm install --frozen-lockfile
 
 # Copy source
-COPY packages/ ./packages/
+COPY packages/core/ ./packages/core/
+COPY packages/connector-sdk/ ./packages/connector-sdk/
+COPY packages/connectors/ ./packages/connectors/
 COPY apps/api/ ./apps/api/
 
 # Generate Prisma client
-WORKDIR /app/apps/api
-RUN pnpm exec prisma generate
-
-# Build all packages
 WORKDIR /app
-RUN pnpm --filter @cost-watchdog/api build
+RUN pnpm --filter @cost-watchdog/api exec prisma generate
+RUN pnpm --filter @cost-watchdog/api... build
 
 # Prune dev dependencies after build
 RUN pnpm prune --prod
