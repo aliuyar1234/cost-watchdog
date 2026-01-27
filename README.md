@@ -4,18 +4,20 @@
 [![License: MIT](https://img.shields.io/github/license/aliuyar1234/cost-watchdog)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](.node-version)
 
-Cost Watchdog is a self-hosted cost monitoring platform that ingests invoices (PDF/CSV/XLSX), extracts cost records, detects anomalies, and notifies teams before overspend becomes visible in month-end or yearly reviews.
+Cost Watchdog is a self-hosted cost monitoring and anomaly detection platform. It ingests invoices (PDF/CSV/XLSX), extracts structured cost records (optional LLM fallback for difficult PDFs), detects unusual spend patterns, and notifies teams before overspend becomes visible in month-end or yearly reviews.
 
-> Status: early preview (`v0.1.0`). APIs, UX, and data model may change.
+> Status: preview (`v0.1.0`). APIs, UX, and data model are still evolving.
+
+This repository contains the software (not a hosted SaaS). You run it yourself.
 
 ## Screenshot
 
 ![Dashboard](docs/Dashboard.png)
 
-## Key capabilities
+## What you get
 
 - Document ingestion and validation (PDF, CSV, XLSX) with S3-compatible storage (MinIO for local development)
-- Automated processing pipeline (upload → extraction → anomaly detection → alerting) using Redis + BullMQ workers
+- Automated processing pipeline (upload -> extraction -> anomaly detection -> alerting) using Redis + BullMQ workers
 - Multiple notification channels: Email (Resend), Slack webhooks, Microsoft Teams webhooks
 - Role-based access control and scoped API keys
 - OpenAPI 3.1 spec + Swagger UI (`/api/v1/docs`)
@@ -66,10 +68,22 @@ cp .env.example .env
 docker compose -f infrastructure/docker-compose.yml up -d
 ```
 
-### 4) Start API and Web
+### 4) Initialize the database (first run)
+
+```bash
+pnpm db:push
+```
+
+### 5) Start API and workers (required for the processing pipeline)
 
 ```bash
 pnpm --filter @cost-watchdog/api dev
+pnpm --filter @cost-watchdog/api dev:workers
+```
+
+### 6) Start Web
+
+```bash
 pnpm --filter @cost-watchdog/web dev
 ```
 
@@ -81,7 +95,7 @@ Default URLs:
 
 ## Configuration
 
-Configuration is documented in `.env.example` (including security, digest, and retention options).
+Configuration is documented in `.env.example` (including security, storage, notifications, digest, and retention options).
 
 Common variables:
 
@@ -89,7 +103,7 @@ Common variables:
 - `AUTH_SECRET` (required, 32+ chars)
 - `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`
 - `WEB_URL`, `NEXT_PUBLIC_API_URL`
-- Optional: `FIELD_ENCRYPTION_KEY` (required for MFA and encrypted fields)
+- `FIELD_ENCRYPTION_KEY` (required for MFA and encrypted fields; recommended in production)
 - Optional: `RESEND_API_KEY` for email alerts
 - Optional: `ANTHROPIC_API_KEY` for LLM extraction fallback
 - Optional: `METRICS_TOKEN` to protect `/metrics`
@@ -111,6 +125,21 @@ pnpm test:e2e
 ## Load testing (k6)
 
 See `scripts/loadtest/README.md`.
+
+## Docker & deployment
+
+Build images locally:
+
+```bash
+docker build -f apps/api/Dockerfile -t cost-watchdog-api .
+docker build -f apps/web/Dockerfile -t cost-watchdog-web .
+```
+
+Deployment examples:
+
+- Docker Compose (production): `infrastructure/docker-compose.prod.yml`
+- Docker Swarm: `infrastructure/docker-compose.swarm.yml`
+- Observability stack: `infrastructure/docker-compose.observability.yml`
 
 ## Security
 
