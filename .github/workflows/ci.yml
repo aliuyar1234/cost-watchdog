@@ -183,6 +183,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @cost-watchdog/api exec prisma generate
 
+      - name: Build workspace dependencies
+        run: pnpm --filter @cost-watchdog/api... build
+
       - name: Run database migrations
         run: pnpm --filter @cost-watchdog/api exec prisma db push
         env:
