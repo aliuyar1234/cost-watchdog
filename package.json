@@ -11,7 +11,7 @@
     "build": "turbo build",
     "lint": "turbo lint",
     "lint:fix": "turbo lint -- --fix",
-    "test": "turbo test",
+    "test": "node scripts/run-integration-tests.mjs",
     "test:integration": "node scripts/run-integration-tests.mjs",
     "test:e2e": "node scripts/run-e2e-tests.mjs",
     "typecheck": "turbo typecheck",

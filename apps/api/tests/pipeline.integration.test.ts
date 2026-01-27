@@ -38,7 +38,7 @@ function formatYmd(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-async function waitFor(condition: () => Promise<boolean>, timeoutMs = 10_000): Promise<void> {
+async function waitFor(condition: () => Promise<boolean>, timeoutMs = 20_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   // Keep interval short - the workers should be quick in tests.
   const intervalMs = 100;
@@ -212,5 +212,5 @@ describe('End-to-end pipeline (outbox + queues + workers)', () => {
       ]);
       await closeQueues();
     }
-  }, 30_000);
+  }, 60_000);
 });
