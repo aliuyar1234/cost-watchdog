@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fe02b34f77f8bc703c70f5b1ad1b4fd506458d1d # v4.0.0
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fe02b34f77f8bc703c70f5b1ad1b4fd506458d1d # v4.0.0
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
@@ -120,7 +120,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fe02b34f77f8bc703c70f5b1ad1b4fd506458d1d # v4.0.0
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
@@ -175,7 +175,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@fe02b34f77f8bc703c70f5b1ad1b4fd506458d1d # v4.0.0
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
           version: ${{ env.PNPM_VERSION }}
 
