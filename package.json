@@ -43,6 +43,11 @@
       "eslint --fix"
     ]
   },
+  "pnpm": {
+    "overrides": {
+      "glob": "10.5.0"
+    }
+  },
   "packageManager": "pnpm@8.15.0",
   "engines": {
     "node": ">=20"
