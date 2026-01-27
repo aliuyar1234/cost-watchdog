@@ -23,6 +23,8 @@ module.exports = {
       files: ['scripts/loadtest/**/*.js'],
       globals: {
         __ENV: 'readonly',
+        __ITER: 'readonly',
+        __VU: 'readonly',
       },
     },
     {

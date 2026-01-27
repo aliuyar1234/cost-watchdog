@@ -15,4 +15,6 @@ Examples:
 ```bash
 k6 run scripts/loadtest/k6-dashboard.js
 k6 run scripts/loadtest/k6-anomalies.js
+k6 run scripts/loadtest/k6-documents.js
+k6 run scripts/loadtest/k6-upload.js
 ```
