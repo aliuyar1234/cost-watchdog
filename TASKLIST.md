@@ -1,4 +1,4 @@
-# Cost Watchdog - Audit Task List (updated 2026-01-26)
+# Cost Watchdog - Audit Task List (updated 2026-01-27)
 
 Goal: bring the repo to **>= 8/10** quality for a public GitHub release (reliable, secure, maintainable).
 
@@ -128,5 +128,5 @@ Legend: **P0** = broken/blocking/security, **P1** = high impact, **P2** = nice-t
 
 ## 13) Next Session / Optional Follow-ups
 
-- [ ] (P2) Add more Playwright coverage: upload multiple file types (PDF/CSV/XLSX), pagination, admin user management.
-- [ ] (P2) Add load-testing (k6/artillery) for high-traffic endpoints and upload/extraction throughput.
+- [x] (P2) Add more Playwright coverage: upload multiple file types (PDF/CSV/XLSX), pagination, admin user management.
+- [x] (P2) Add load-testing (k6/artillery) for high-traffic endpoints and upload/extraction throughput.

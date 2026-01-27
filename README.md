@@ -1,375 +1,125 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?logo=typescript&logoColor=white" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Node.js-20+-339933.svg?logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Tests-573%20passing-success.svg" alt="Tests">
-  <img src="https://img.shields.io/badge/Security-Best%20Effort-yellow.svg" alt="Security">
-</p>
+# Cost Watchdog
 
-<h1 align="center">Cost Watchdog</h1>
+[![CI](https://github.com/aliuyar1234/cost-watchdog/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aliuyar1234/cost-watchdog/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/aliuyar1234/cost-watchdog)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](.node-version)
 
-<p align="center">
-  <strong>Intelligente Kostenüberwachung für den DACH-Mittelstand</strong>
-</p>
+Cost Watchdog is a self-hosted cost monitoring platform that ingests invoices (PDF/CSV/XLSX), extracts cost records, detects anomalies, and notifies teams before overspend becomes visible in month-end or yearly reviews.
 
-<p align="center">
-  Erkennt Kostenanomalien automatisch, bevor sie teuer werden.<br>
-  <em>"Wir sagen dir, wenn etwas nicht stimmt – bevor du 12 Monate zu viel zahlst."</em>
-</p>
+> Status: early preview (`v0.1.0`). APIs, UX, and data model may change.
 
----
-
-## Das Problem
-
-Ein mittelständisches Unternehmen bemerkt nach 12 Monaten, dass die Stromrechnung um 8,5% gestiegen ist. Kumuliert: **€80.000 Mehrkosten**. Das hätte man in Monat 3 erkennen können.
-
-## Die Lösung
-
-Cost Watchdog analysiert alle eingehenden Rechnungen und Kostendaten automatisch:
-
-- **8 Anomalie-Checks** (YoY, MoM, Preissprünge, statistische Ausreißer, Saisonalität, ...)
-- **Sofortige Alerts** via E-Mail, Slack oder Microsoft Teams
-- **Daily Digest** mit konfigurierbarer Zeit und User-Preferences
-- **Dashboard** mit Drill-Down nach Standort, Lieferant, Kostenart
-- **PDF-Extraktion** mit Template-Matching und LLM-Fallback
-
-## Dashboard
+## Screenshot
 
 ![Dashboard](docs/Dashboard.png)
 
----
+## Key capabilities
 
-## Features
+- Document ingestion and validation (PDF, CSV, XLSX) with S3-compatible storage (MinIO for local development)
+- Automated processing pipeline (upload → extraction → anomaly detection → alerting) using Redis + BullMQ workers
+- Multiple notification channels: Email (Resend), Slack webhooks, Microsoft Teams webhooks
+- Role-based access control and scoped API keys
+- OpenAPI 3.1 spec + Swagger UI (`/api/v1/docs`)
+- Security hardening: CSRF, rate limiting, secure logging/redaction, optional encrypted fields (AES-256-GCM), optional MFA (TOTP)
 
-| Feature                      | Beschreibung                                             |
-| ---------------------------- | -------------------------------------------------------- |
-| **Anomaly Detection**        | 8 verschiedene Checks mit konfigurierbaren Schwellwerten |
-| **Multi-Channel Alerts**     | E-Mail, Slack, Microsoft Teams                           |
-| **Daily Digest**             | Zeitgesteuerte Zusammenfassung mit User-Preferences      |
-| **Notification Preferences** | Pro Nutzer steuerbare Alert- und Digest-Settings         |
-| **Document Processing**      | PDF, Excel, CSV mit automatischer Datenextraktion        |
-| **Role-Based Access**        | Admin, Manager, Analyst, Viewer, Auditor                 |
-| **API-First**                | RESTful API mit API-Key Authentifizierung                |
-| **Export**                   | CSV/JSON Export für Compliance und Reporting             |
+## Architecture
 
----
+![Architecture](docs/watchdog-architecture.png)
 
-## Architektur
-
-![Cost Watchdog Architecture](./docs/watchdog-architecture.png)
-
-## Tech Stack
-
-| Layer        | Technologie                    | Warum                                 |
-| ------------ | ------------------------------ | ------------------------------------- |
-| **Frontend** | Next.js 14, React 18, Tailwind | Server Components, schnelle Iteration |
-| **Backend**  | Fastify, TypeScript            | Performance, Schema-Validierung       |
-| **ORM**      | Prisma                         | Type-Safety, Migrations               |
-| **Database** | PostgreSQL 15                  | JSONB, Aggregationen, Zuverlässigkeit |
-| **Queue**    | Redis + BullMQ                 | Job Processing, Retry-Logik           |
-| **Storage**  | MinIO (S3-kompatibel)          | Dokumente, lokal entwickeln           |
-| **Monorepo** | Turborepo + pnpm               | Schnelle Builds, Workspace-Protokoll  |
-
----
-
-## Projekt-Struktur
+## Repository layout
 
 ```
-cost-watchdog/
-├── apps/
-│   ├── api/                    # Fastify Backend (Port 3001)
-│   │   ├── src/
-│   │   │   ├── routes/         # REST Endpoints
-│   │   │   ├── lib/            # Utilities, Auth, DB
-│   │   │   ├── middleware/     # Auth, Rate Limiting
-│   │   │   └── workers/        # Background Jobs
-│   │   ├── tests/              # Vitest Tests
-│   │   └── prisma/             # Schema & Migrations
-│   │
-│   └── web/                    # Next.js Frontend (Port 3000)
-│       └── app/
-│           ├── (auth)/         # Login, Register
-│           ├── (dashboard)/    # Main Application
-│           ├── components/     # UI Components
-│           └── lib/            # API Client, Hooks
-│
-├── packages/
-│   ├── core/                   # Business Logic
-│   │   └── src/anomaly/        # Anomaly Detection Engine
-│   ├── connector-sdk/          # Connector Interface
-│   ├── connectors/             # PDF, Excel, CSV
-│   └── ui/                     # Shared Components
-│
-├── docs/                       # Spezifikation
-├── infrastructure/             # Docker Compose
-└── .github/workflows/          # CI/CD
+apps/
+  api/                Fastify API + workers (http://localhost:3001)
+  web/                Next.js App Router UI (http://localhost:3000)
+packages/
+  core/               Shared domain types and utilities
+  connectors/         Document connectors/parsers (PDF/CSV/XLSX)
+  connector-sdk/      Connector SDK
+  ui/                 Shared UI primitives (optional)
+infrastructure/       Docker Compose files (dev/test/e2e)
+scripts/              Repo automation (integration/e2e runners, load tests)
 ```
 
----
+## Getting started (local development)
 
-## Quick Start
-
-### Voraussetzungen
+### Prerequisites
 
 - Node.js 20+
 - pnpm 8+
-- Docker & Docker Compose
+- Docker + Docker Compose
 
-### Installation
+### 1) Install dependencies
 
 ```bash
-# Repository klonen
-git clone https://github.com/aliuyar1234/cost-watchdog.git
-cd cost-watchdog
-
-# Dependencies installieren
 pnpm install
-
-# Environment konfigurieren
-cp .env.example .env
-
-# Infrastruktur starten
-docker compose -f infrastructure/docker-compose.yml up -d
-
-# Datenbank initialisieren
-pnpm db:push
-
-# Development Server starten
-pnpm dev
 ```
 
-Die Anwendung ist erreichbar unter:
-
-- **Frontend:** http://localhost:3000
-- **API:** http://localhost:3001
-- **API Docs:** http://localhost:3001/api/v1/docs
-
-### Erster Admin-User
-
-Der erste registrierte Benutzer wird nur dann Admin, wenn `INITIAL_ADMIN_EMAIL`
-gesetzt ist und mit der ersten Registrierung uebereinstimmt. Ohne diese Variable
-werden neue Nutzer als `viewer` angelegt. Setze `INITIAL_ADMIN_EMAIL` in `.env`,
-bevor du den ersten Account erstellst.
-
----
-
-## Entwicklung
+### 2) Configure environment
 
 ```bash
-# Alle Apps im Dev-Modus
-pnpm dev
+cp .env.example .env
+```
 
-# Nur API
+### 3) Start infrastructure
+
+```bash
+docker compose -f infrastructure/docker-compose.yml up -d
+```
+
+### 4) Start API and Web
+
+```bash
 pnpm --filter @cost-watchdog/api dev
-
-# Nur Web
 pnpm --filter @cost-watchdog/web dev
+```
 
-# Type-Check
+Default URLs:
+
+- Web: `http://localhost:3000`
+- API: `http://localhost:3001/api/v1`
+- Swagger UI: `http://localhost:3001/api/v1/docs`
+
+## Configuration
+
+Configuration is documented in `.env.example` (including security, digest, and retention options).
+
+Common variables:
+
+- `DATABASE_URL`, `REDIS_URL`
+- `AUTH_SECRET` (required, 32+ chars)
+- `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`
+- `WEB_URL`, `NEXT_PUBLIC_API_URL`
+- Optional: `FIELD_ENCRYPTION_KEY` (required for MFA and encrypted fields)
+- Optional: `RESEND_API_KEY` for email alerts
+- Optional: `ANTHROPIC_API_KEY` for LLM extraction fallback
+- Optional: `METRICS_TOKEN` to protect `/metrics`
+
+## Testing
+
+```bash
+pnpm lint
 pnpm typecheck
 
-# Linting
-pnpm lint
-
-# Tests ausführen
+# API integration tests (spins up Postgres + Redis via Docker)
 pnpm test
-
-# Prisma Studio (DB GUI)
-pnpm db:studio
-```
-
----
-
-## API
-
-### Authentifizierung
-
-```bash
-# Login
-curl -X POST http://localhost:3001/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "password123"}'
-
-# Mit API-Key
-curl http://localhost:3001/api/v1/anomalies \
-  -H "X-API-Key: your-api-key"
-```
-
-### Password Reset
-
-- `POST /api/v1/auth/forgot-password` generates a reset token. In development the token
-  is logged; in production you need to wire email delivery yourself.
-- `POST /api/v1/auth/reset-password` accepts `{ token, newPassword }`.
-
-### Wichtige Endpoints
-
-| Methode | Endpoint                            | Beschreibung              |
-| ------- | ----------------------------------- | ------------------------- |
-| `POST`  | `/api/v1/auth/login`                | Benutzer authentifizieren |
-| `GET`   | `/api/v1/analytics/dashboard`       | Dashboard KPIs            |
-| `GET`   | `/api/v1/anomalies`                 | Anomalien auflisten       |
-| `POST`  | `/api/v1/anomalies/:id/acknowledge` | Anomalie bestätigen       |
-| `GET`   | `/api/v1/exports/cost-records`      | Kostendaten exportieren   |
-| `POST`  | `/api/v1/documents`                 | Dokument hochladen        |
-
----
-
-## Anomaly Detection
-
-Cost Watchdog führt 8 verschiedene Anomalie-Checks durch:
-
-| Check                   | Beschreibung                 | Schwellwert   |
-| ----------------------- | ---------------------------- | ------------- |
-| **YoY Deviation**       | Vergleich zum Vorjahresmonat | ±15%          |
-| **MoM Deviation**       | Vergleich zum Vormonat       | ±25%          |
-| **Price Spike**         | Preis pro Einheit            | ±20%          |
-| **Statistical Outlier** | Z-Score Analyse              | >2.5σ         |
-| **Seasonal Anomaly**    | Saisonale Abweichung         | ±30%          |
-| **Budget Exceeded**     | Budgetüberschreitung         | >100%         |
-| **Duplicate Detection** | Doppelte Rechnungen          | Exact Match   |
-| **Missing Period**      | Fehlende Abrechnungsperiode  | Gap Detection |
-
-Jede Anomalie erhält einen Schweregrad: `info`, `warning`, oder `critical`.
-
----
-
-## Deployment
-
-### Docker
-
-```bash
-# Production Build
-docker build -t cost-watchdog-api -f apps/api/Dockerfile .
-docker build -t cost-watchdog-web --build-arg NEXT_PUBLIC_API_URL=https://api.example.com/api/v1 -f apps/web/Dockerfile .
-
-# Mit Docker Compose
-docker compose -f infrastructure/docker-compose.yml up -d
-```
-
-### Database Migrations
-
-```bash
-# Apply migrations in production/CI
-pnpm db:deploy
-```
-
-### Environment Variables
-
-See `.env.example` for the full list (including daily digest and retention settings).
-
-```env
-# Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/costwatchdog
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Auth
-AUTH_SECRET=your-secret-here-min-32-chars-long
-INITIAL_ADMIN_EMAIL=admin@example.com
-
-# S3/MinIO
-S3_ENDPOINT=http://localhost:9000
-S3_ACCESS_KEY=minioadmin
-S3_SECRET_KEY=minioadmin
-S3_BUCKET=documents
-
-# App
-WEB_URL=http://localhost:3000
-
-# Optional: LLM für PDF-Extraktion
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
----
-
-## Tests
-
-```bash
-# Integration Tests (Postgres + Redis via Docker)
 pnpm test:integration
 
-# Mit Coverage
-pnpm test -- --coverage
-
-# Einzelne Test-Datei
-pnpm --filter @cost-watchdog/api test anomalies.test.ts
+# E2E smoke tests (spins up infra + api + web via Docker)
+pnpm test:e2e
 ```
 
----
+## Load testing (k6)
+
+See `scripts/loadtest/README.md`.
 
 ## Security
 
-Cost Watchdog hat security-focused Defaults, aber keine formale Compliance-Zertifizierung.
-
-> **[Vollständige Security-Dokumentation](docs/SECURITY.md)**
-
-### Authentication & Access Control
-
-| Feature                  | Beschreibung                                             |
-| ------------------------ | -------------------------------------------------------- |
-| **JWT + Refresh Tokens** | Kurzlebige Access Tokens (15min), sichere Token-Rotation |
-| **HttpOnly Cookies**     | Tokens sicher gespeichert, kein JavaScript-Zugriff       |
-| **Role-Based Access**    | 5 Rollen: Admin, Manager, Analyst, Viewer, Auditor       |
-| **Account Lockout**      | Schutz gegen Brute-Force (5 Versuche → 15min Sperre)     |
-| **Strong Passwords**     | Min. 12 Zeichen, Komplexitätsregeln, Breach-Detection    |
-| **MFA (TOTP)**           | 2-Faktor-Authentifizierung mit Google Authenticator etc. |
-
-### API & Data Security
-
-| Feature              | Beschreibung                                            |
-| -------------------- | ------------------------------------------------------- |
-| **API Key Scopes**   | Granulare Berechtigungen: read, write, delete, admin    |
-| **CSRF Protection**  | Double-Submit Cookie Pattern                            |
-| **Rate Limiting**    | Redis-basiert mit Sliding Window                        |
-| **Field Encryption** | AES-256-GCM für sensible Daten (Rechnungsnummern etc.)  |
-| **Secure Logging**   | Automatische Redaction von Passwörtern, Tokens, E-Mails |
-| **Input Validation** | Zod Schemas, XSS-Prevention, SQL-Injection-Schutz       |
-
-### Compliance & Audit
-
-| Feature                | Beschreibung                                              |
-| ---------------------- | --------------------------------------------------------- |
-| **Audit Logging**      | Vollständiger Trail aller sicherheitsrelevanten Aktionen  |
-| **GDPR Compliance**    | Datenexport, Right to Erasure, Anonymisierung             |
-| **Data Retention**     | Automatische Bereinigung nach konfigurierbaren Zeiträumen |
-| **Session Management** | Aktive Sessions einsehen und widerrufen                   |
-
-### Infrastructure
-
-| Feature                | Beschreibung                                                    |
-| ---------------------- | --------------------------------------------------------------- |
-| **Docker Secrets**     | Sensitive Konfiguration via Secrets statt Environment-Variablen |
-| **TLS/HTTPS**          | Traefik Reverse Proxy mit Let's Encrypt Zertifikaten            |
-| **Non-Root Container** | Container laufen als unprivilegierte User                       |
-| **CVE Scanning**       | Trivy, TruffleHog, npm audit in CI/CD                           |
-| **Security Headers**   | Helmet.js mit CSP, HSTS, X-Frame-Options etc.                   |
-
----
-
-## Roadmap
-
-- [ ] Multi-Tenant Support
-- [ ] Webhook Integrations
-- [ ] Custom Anomaly Rules
-- [ ] Machine Learning Predictions
-- [ ] Mobile App
-
----
+Please see `SECURITY.md` for reporting guidelines and hardening notes.
 
 ## Contributing
 
-Contributions are welcome. See `CONTRIBUTING.md`.
-
----
+See `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
 
 ## License
 
 MIT. See `LICENSE`.
-
----
-
-<p align="center">
-  <sub>Built with TypeScript, Fastify, Next.js, and PostgreSQL</sub>
-</p>
