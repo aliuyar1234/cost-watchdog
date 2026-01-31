@@ -1,0 +1,85 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto-start-reverse" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+    </marker>
+    <style>
+      .title { font-family: "Segoe UI", Arial, sans-serif; font-size: 18px; font-weight: 600; fill: #1f2933; }
+      .label { font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; font-weight: 600; fill: #1f2933; }
+      .small { font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; fill: #52606d; }
+      .group { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+      .box { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.5; }
+      .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+      .arrow-bidir { stroke: #475569; stroke-width: 1.5; fill: none; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .dashed { stroke-dasharray: 6 4; }
+    </style>
+  </defs>
+
+  <rect class="group" x="40" y="40" width="420" height="140" rx="14" ry="14" />
+  <text class="title" x="60" y="70">Clients</text>
+  <rect class="box" x="70" y="90" width="150" height="60" rx="10" ry="10" />
+  <text class="label" x="145" y="118" text-anchor="middle">Web UI</text>
+  <text class="small" x="145" y="136" text-anchor="middle">(Next.js)</text>
+  <rect class="box" x="240" y="90" width="150" height="60" rx="10" ry="10" />
+  <text class="label" x="315" y="118" text-anchor="middle">API Clients</text>
+  <text class="small" x="315" y="136" text-anchor="middle">(CLI / Integrations)</text>
+
+  <rect class="group" x="40" y="210" width="1120" height="210" rx="14" ry="14" />
+  <text class="title" x="60" y="240">Cost Watchdog Core</text>
+
+  <rect class="box" x="120" y="260" width="240" height="80" rx="10" ry="10" />
+  <text class="label" x="240" y="296" text-anchor="middle">API</text>
+  <text class="small" x="240" y="314" text-anchor="middle">(Fastify)</text>
+
+  <rect class="box" x="400" y="260" width="240" height="80" rx="10" ry="10" />
+  <text class="label" x="520" y="286" text-anchor="middle">Job Queue</text>
+  <text class="small" x="520" y="304" text-anchor="middle">BullMQ (Redis-backed)</text>
+  <text class="small" x="520" y="320" text-anchor="middle">in API + Workers</text>
+
+  <rect class="box" x="680" y="250" width="420" height="110" rx="10" ry="10" />
+  <text class="label" x="890" y="280" text-anchor="middle">Workers</text>
+  <text class="small" x="890" y="300" text-anchor="middle">Extraction + Connectors (PDF/CSV/XLSX)</text>
+  <text class="small" x="890" y="318" text-anchor="middle">Anomaly Detection, Aggregation</text>
+  <text class="small" x="890" y="336" text-anchor="middle">Alerting + Notifications</text>
+
+  <rect class="group" x="40" y="460" width="760" height="200" rx="14" ry="14" />
+  <text class="title" x="60" y="490">Data Stores</text>
+
+  <rect class="box" x="80" y="520" width="200" height="80" rx="10" ry="10" />
+  <text class="label" x="180" y="556" text-anchor="middle">PostgreSQL</text>
+  <text class="small" x="180" y="574" text-anchor="middle">Metadata + Audit Logs</text>
+
+  <rect class="box" x="310" y="520" width="200" height="80" rx="10" ry="10" />
+  <text class="label" x="410" y="556" text-anchor="middle">Redis</text>
+  <text class="small" x="410" y="574" text-anchor="middle">Queues + Cache</text>
+
+  <rect class="box" x="540" y="520" width="200" height="80" rx="10" ry="10" />
+  <text class="label" x="640" y="556" text-anchor="middle">S3 / MinIO</text>
+  <text class="small" x="640" y="574" text-anchor="middle">Documents + Exports</text>
+
+  <rect class="group" x="840" y="460" width="320" height="200" rx="14" ry="14" />
+  <text class="title" x="860" y="490">External Services</text>
+
+  <rect class="box" x="870" y="520" width="260" height="60" rx="10" ry="10" />
+  <text class="label" x="1000" y="548" text-anchor="middle">LLM Provider</text>
+  <text class="small" x="1000" y="566" text-anchor="middle">(Anthropic optional)</text>
+
+  <rect class="box" x="870" y="590" width="260" height="60" rx="10" ry="10" />
+  <text class="label" x="1000" y="618" text-anchor="middle">Notifications</text>
+  <text class="small" x="1000" y="636" text-anchor="middle">Resend, Slack, Teams</text>
+
+  <line class="arrow" x1="240" y1="180" x2="240" y2="260" />
+  <line class="arrow" x1="360" y1="300" x2="400" y2="300" />
+  <line class="arrow" x1="640" y1="300" x2="680" y2="300" />
+
+  <line class="arrow" x1="240" y1="340" x2="320" y2="460" />
+  <text class="small" x="130" y="410">read/write Postgres + S3</text>
+  <line class="arrow" x1="890" y1="360" x2="520" y2="460" />
+  <text class="small" x="720" y="420">read/write Postgres + S3</text>
+
+  <line class="arrow dashed" x1="520" y1="340" x2="410" y2="520" />
+
+  <line class="arrow" x1="980" y1="360" x2="1000" y2="590" />
+  <line class="arrow-bidir dashed" x1="1040" y1="340" x2="1000" y2="520" />
+  <text class="small" x="1048" y="360">optional request/response</text>
+</svg>

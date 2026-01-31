@@ -25,7 +25,7 @@ This repository contains the software (not a hosted SaaS). You run it yourself.
 
 ## Architecture
 
-![Architecture](docs/watchdog-architecture.png)
+![Architecture](docs/watchdog-architecture.svg)
 
 ## Repository layout
 
