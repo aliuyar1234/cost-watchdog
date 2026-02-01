@@ -45,7 +45,8 @@
   },
   "pnpm": {
     "overrides": {
-      "glob@>=10.2.0 <10.5.0": "10.5.0"
+      "glob@>=10.2.0 <10.5.0": "10.5.0",
+      "fast-xml-parser": "5.3.4"
     }
   },
   "packageManager": "pnpm@8.15.0",
