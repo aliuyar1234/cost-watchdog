@@ -22,14 +22,25 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface AuthProviderProps {
+  children: ReactNode;
+  initialUser?: User | null;
+}
+
+export function AuthProvider({ children, initialUser = null }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [isLoading, setIsLoading] = useState(initialUser === null);
   const router = useRouter();
 
   // Check auth status on mount
-  // Server sets HttpOnly cookies, so we just call /me to check if authenticated
+  // Server sets HttpOnly cookies. If no initial user is provided, call /me.
   useEffect(() => {
+    if (initialUser) {
+      setUser(initialUser);
+      setIsLoading(false);
+      return;
+    }
+
     const checkAuth = async () => {
       try {
         const response = await authApi.me();
@@ -43,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkAuth();
-  }, []);
+  }, [initialUser]);
 
   const handleAuthResponse = useCallback((response: AuthResponse) => {
     // Server sets HttpOnly cookies automatically

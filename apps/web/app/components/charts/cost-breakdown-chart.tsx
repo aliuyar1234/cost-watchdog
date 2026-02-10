@@ -4,6 +4,7 @@ import { useId } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import type { BreakdownItem } from '../../lib/api';
 import { formatCurrency } from '../../lib/formatting';
+import { getCostTypeLabel } from '../../lib/labels';
 
 interface CostBreakdownChartProps {
   data: BreakdownItem[];
@@ -23,31 +24,6 @@ const COLORS = [
   '#84cc16', // lime
   '#6366f1', // indigo
 ];
-
-const COST_TYPE_LABELS: Record<string, string> = {
-  electricity: 'Strom',
-  natural_gas: 'Erdgas',
-  water: 'Wasser',
-  heating_oil: 'Heizöl',
-  district_heating: 'Fernwärme',
-  district_cooling: 'Fernkälte',
-  sewage: 'Abwasser',
-  waste: 'Abfall',
-  rent: 'Miete',
-  operating_costs: 'Nebenkosten',
-  insurance: 'Versicherung',
-  maintenance: 'Wartung',
-  it_licenses: 'IT-Lizenzen',
-  it_cloud: 'Cloud-Services',
-  it_hardware: 'IT-Hardware',
-  telecom_internet: 'Internet',
-  telecom_mobile: 'Mobilfunk',
-  telecom_landline: 'Festnetz',
-  fuel_diesel: 'Diesel',
-  fuel_petrol: 'Benzin',
-  supplier_recurring: 'Wiederkehrend',
-  other: 'Sonstige',
-};
 
 export function CostBreakdownChart({ data, type, isLoading }: CostBreakdownChartProps) {
   const descriptionId = useId();
@@ -71,7 +47,7 @@ export function CostBreakdownChart({ data, type, isLoading }: CostBreakdownChart
   const getLabel = (item: BreakdownItem): string => {
     switch (type) {
       case 'costType':
-        return COST_TYPE_LABELS[item.costType || ''] || item.costType || 'Unbekannt';
+        return item.costType ? getCostTypeLabel(item.costType) : 'Unbekannt';
       case 'location':
         return item.locationName || 'Unbekannt';
       case 'supplier':
