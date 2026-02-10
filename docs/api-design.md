@@ -1,218 +1,167 @@
-## Teil 6: API Design
+# API Design
 
-### 6.1 API-Struktur
+This page describes the currently implemented API behavior.
 
-```
-/api/v1
-├── /auth
-│   ├── POST   /login
-│   ├── POST   /logout
-│   ├── POST   /refresh
-│   ├── GET    /me
-│   └── POST   /sso/callback
-│
-├── /organizations
-│   ├── GET    /                      # Liste
-│   ├── POST   /                      # Erstellen
-│   ├── GET    /:id                   # Details
-│   ├── PUT    /:id                   # Aktualisieren
-│   └── DELETE /:id                   # Löschen
-│
-├── /locations
-│   ├── GET    /                      # Liste (mit Filter)
-│   ├── POST   /                      # Erstellen
-│   ├── GET    /:id                   # Details
-│   ├── PUT    /:id                   # Aktualisieren
-│   ├── DELETE /:id                   # Löschen
-│   └── GET    /:id/costs             # Kosten am Standort
-│
-├── /suppliers
-│   ├── GET    /                      # Liste
-│   ├── POST   /                      # Erstellen
-│   ├── GET    /:id                   # Details
-│   ├── PUT    /:id                   # Aktualisieren
-│   └── GET    /:id/costs             # Kosten dieses Lieferanten
-│
-├── /documents
-│   ├── GET    /                      # Liste
-│   ├── POST   /upload                # Hochladen
-│   ├── GET    /:id                   # Details + Metadaten
-│   ├── GET    /:id/download          # Original herunterladen
-│   ├── POST   /:id/extract           # Extraktion triggern
-│   ├── POST   /:id/verify            # Verifizieren
-│   └── GET    /:id/costs             # Extrahierte Kosten
-│
-├── /costs
-│   ├── GET    /                      # Liste (mit Filter)
-│   ├── POST   /                      # Manuell erstellen
-│   ├── GET    /:id                   # Details
-│   ├── PUT    /:id                   # Aktualisieren
-│   ├── DELETE /:id                   # Löschen
-│   ├── POST   /:id/verify            # Verifizieren
-│   └── GET    /:id/anomalies         # Anomalien für diesen Record
-│
-├── /anomalies
-│   ├── GET    /                      # Liste (mit Filter)
-│   ├── GET    /:id                   # Details
-│   ├── POST   /:id/acknowledge       # Bestätigen
-│   └── POST   /:id/resolve           # Als gelöst markieren
-│
-├── /alerts
-│   ├── GET    /                      # Liste
-│   └── GET    /:id                   # Details
-│
-├── /analytics
-│   ├── GET    /dashboard             # Dashboard-Daten
-│   ├── GET    /trends                # Kostentrends
-│   ├── GET    /by-location           # Kosten pro Standort
-│   ├── GET    /by-supplier           # Kosten pro Lieferant
-│   ├── GET    /by-cost-type          # Kosten pro Kategorie
-│   └── GET    /price-per-unit        # Preis/Einheit Trends
-│
-├── /reports
-│   ├── POST   /monthly               # Monatsbericht generieren
-│   ├── POST   /excel                 # Excel-Export
-│   ├── POST   /pdf                   # PDF-Report
-│   └── GET    /:id/download          # Report herunterladen
-│
-├── /settings
-│   ├── GET    /                      # Tenant-Einstellungen
-│   ├── PUT    /                      # Einstellungen aktualisieren
-│   ├── GET    /thresholds            # Alert-Schwellwerte
-│   └── PUT    /thresholds            # Schwellwerte anpassen
-│
-├── /users
-│   ├── GET    /                      # User-Liste
-│   ├── POST   /                      # User erstellen
-│   ├── GET    /:id                   # User-Details
-│   ├── PUT    /:id                   # User aktualisieren
-│   └── DELETE /:id                   # User löschen
-│
-├── /webhooks
-│   ├── GET    /                      # Webhook-Liste
-│   ├── POST   /                      # Webhook erstellen
-│   ├── DELETE /:id                   # Webhook löschen
-│   └── POST   /:id/test              # Webhook testen
-│
-└── /audit
-    ├── GET    /logs                  # Audit-Logs (mit Filter)
-    └── GET    /entity/:type/:id      # Logs für bestimmte Entity
-```
+## Base URL and versioning
 
-### 6.2 Beispiel-Response: Dashboard
+- Base path: `/api/v1`
+- Health routes are outside version prefix: `/health`, `/health/detailed`
+- Metrics route is outside version prefix: `/metrics`
 
-```typescript
-// GET /api/v1/analytics/dashboard?period=2024
+## OpenAPI exposure
 
-{
-  "period": {
-    "year": 2024,
-    "month": null,  // Ganzjahr
-    "startDate": "2024-01-01",
-    "endDate": "2024-12-31"
-  },
+OpenAPI routes are conditionally registered:
 
-  "summary": {
-    "totalCosts": 1847320.45,
-    "currency": "EUR",
-    "recordCount": 1247,
-    "locationCount": 12,
-    "supplierCount": 34
-  },
+- `/api/v1/openapi.json`
+- `/api/v1/openapi.yaml`
+- `/api/v1/docs`
 
-  "comparison": {
-    "previousPeriod": {
-      "year": 2023,
-      "totalCosts": 1623450.20,
-      "change": {
-        "absolute": 223870.25,
-        "percent": 13.8
-      }
-    }
-  },
+Default behavior:
 
-  "byCostType": [
-    {
-      "costType": "electricity",
-      "label": "Strom",
-      "totalCosts": 523400.00,
-      "percentage": 28.3,
-      "trend": {
-        "direction": "up",
-        "percent": 8.2
-      }
-    },
-    {
-      "costType": "natural_gas",
-      "label": "Erdgas",
-      "totalCosts": 312800.00,
-      "percentage": 16.9,
-      "trend": {
-        "direction": "down",
-        "percent": -12.4
-      }
-    },
-    // ...
-  ],
+- Development/test: enabled
+- Production: disabled unless `OPENAPI_DOCS_ENABLED=true`
 
-  "byLocation": [
-    {
-      "locationId": "loc_abc123",
-      "locationName": "Wien Hauptsitz",
-      "totalCosts": 487200.00,
-      "percentage": 26.4,
-      "costPerSqm": 42.50,
-      "trend": {
-        "direction": "up",
-        "percent": 15.2
-      }
-    },
-    // ...
-  ],
+## Authentication model
 
-  "byMonth": [
-    { "month": "2024-01", "totalCosts": 142500.00 },
-    { "month": "2024-02", "totalCosts": 138200.00 },
-    { "month": "2024-03", "totalCosts": 145800.00 },
-    // ...
-  ],
+### User authentication
 
-  "anomalies": {
-    "total": 23,
-    "bySeverity": {
-      "critical": 3,
-      "warning": 12,
-      "info": 8
-    },
-    "unacknowledged": 7,
-    "potentialSavings": 34500.00  // Geschätzt
-  },
+- JWT access + refresh tokens are issued by auth endpoints.
+- Tokens are primarily transported via HttpOnly cookies.
+- Bearer token header is also supported.
 
-  "topAnomalies": [
-    {
-      "id": "anom_xyz789",
-      "costRecordId": "cost_abc123",
-      "type": "yoy_deviation",
-      "severity": "critical",
-      "message": "+51,4% vs. Vorjahresmonat",
-      "amount": 71340.00,
-      "deviationAbsolute": 24220.00,
-      "location": "Wien Hauptsitz",
-      "supplier": "Wien Energie",
-      "costType": "electricity",
-      "detectedAt": "2024-10-05T08:23:15Z"
-    },
-    // ...
-  ],
+### API key authentication
 
-  "dataQuality": {
-    "totalRecords": 1247,
-    "verified": 1180,
-    "pending": 45,
-    "withWarnings": 22,
-    "verificationRate": 94.6
-  }
-}
-```
+- `x-api-key` header supported.
+- API keys carry scopes (for example `read:analytics`, `write:documents`).
+- Route protection combines scope checks and role checks where required.
 
----
+### CSRF
+
+- State-changing requests require CSRF validation (double-submit cookie pattern).
+- CSRF token endpoint: `GET /api/v1/csrf/token`
+- API-key-authenticated requests skip CSRF checks.
+
+## Authorization model
+
+### Role-based gates
+
+Roles used in route guards include:
+
+- `admin`
+- `manager`
+- `auditor`
+- `viewer`
+
+Examples:
+
+- User/admin management endpoints: admin only.
+- Exports: manager/admin.
+- Audit logs: admin/auditor.
+
+### Scope-based gates
+
+Representative scopes:
+
+- `read:documents`, `write:documents`
+- `read:anomalies`, `write:anomalies`
+- `read:alerts`, `write:alerts`
+- `read:analytics`
+- `read:exports`
+- `read:users`, `write:users`
+
+## Route groups
+
+### Auth (`/api/v1/auth`)
+
+- `POST /register`
+- `POST /login`
+- `POST /refresh`
+- `POST /forgot-password`
+- `POST /reset-password`
+- `GET /me`
+- `POST /logout`
+
+### Documents (`/api/v1/documents`)
+
+- `POST /upload`
+- `GET /`
+- `GET /:id`
+- `GET /:id/download`
+- `POST /:id/retry-extraction`
+- `DELETE /:id`
+
+### Anomalies (`/api/v1/anomalies`)
+
+- `GET /`
+- `GET /stats`
+- `GET /:id`
+- `POST /:id/acknowledge`
+- `POST /:id/resolve`
+- `POST /:id/false-positive`
+- `PATCH /:id`
+
+### Alerts (`/api/v1/alerts`)
+
+- `GET /`
+- `GET /stats`
+- `GET /:id`
+- `POST /:id/retry`
+- `POST /:id/track-click`
+
+### Analytics (`/api/v1/analytics`)
+
+- `GET /dashboard`
+- `GET /trends`
+- `GET /comparison`
+- `GET /by-cost-type`
+- `GET /by-location`
+- `GET /by-supplier`
+
+### Exports (`/api/v1/exports`)
+
+- `GET /cost-records`
+- `GET /anomalies`
+- `GET /monthly-report`
+
+### Users and sessions
+
+- Users: `/api/v1/users`
+- Sessions: `/api/v1/users/:id/sessions` and `/:sessionId`
+- Includes lifecycle, security, and GDPR operations.
+
+### API keys (`/api/v1/api-keys`)
+
+- List/get/create/revoke keys.
+- `GET /scopes` for scope catalog.
+
+### Settings and notification settings
+
+- `/api/v1/settings`
+- `/api/v1/notification-settings`
+
+### MFA (`/api/v1/mfa`)
+
+- Status, enrollment, verification, backup code use/regeneration, disable.
+
+### Audit logs (`/api/v1/audit-logs`)
+
+- Query and single-entry read for admin/auditor roles.
+
+## Error and rate-limit behavior
+
+- Standard JSON error shape is used across routes (`error`, `message`, optional details).
+- Endpoint-specific rate limits are applied for auth/upload/export flows.
+- Global default rate limit hook is active for API requests.
+
+## Observability endpoints
+
+### `/metrics`
+
+- Prometheus text endpoint.
+- In production, endpoint is disabled if `METRICS_TOKEN` is missing.
+- If token is configured, bearer auth is required.
+
+### `/health` and `/health/detailed`
+
+- `/health`: minimal in production, detailed in non-production.
+- `/health/detailed`: authenticated admin-only diagnostics.

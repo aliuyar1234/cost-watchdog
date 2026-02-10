@@ -1,548 +1,115 @@
-# Security Features
+# Security Notes
 
-Cost Watchdog includes security-focused defaults across the application. This document describes what is implemented in the current codebase (it is not a compliance certification).
+This document describes security controls that are currently implemented in the codebase.
 
----
+For vulnerability disclosure policy, see root `SECURITY.md`.
 
-## Table of Contents
+## Security architecture summary
 
-- [Authentication & Authorization](#authentication--authorization)
-- [API Security](#api-security)
-- [Data Protection](#data-protection)
-- [Session Management](#session-management)
-- [Input Validation & Sanitization](#input-validation--sanitization)
-- [Audit Logging](#audit-logging)
-- [Rate Limiting & DDoS Protection](#rate-limiting--ddos-protection)
-- [File Upload Security](#file-upload-security)
-- [Multi-Factor Authentication (MFA)](#multi-factor-authentication-mfa)
-- [GDPR Compliance](#gdpr-compliance)
-- [Infrastructure Security](#infrastructure-security)
-- [Security Configuration](#security-configuration)
+Primary controls are implemented in `apps/api`:
 
----
+- Auth/token verification middleware
+- CSRF middleware
+- API key scope checks
+- Rate limiting hooks
+- Account lockout logic
+- Secure logging redaction
+- Optional MFA and field encryption
+- Audit logging and session lifecycle controls
 
-## Authentication & Authorization
+## Implemented controls
 
-### Role-Based Access Control (RBAC)
+### 1. Authentication and sessions
 
-Cost Watchdog implements a comprehensive RBAC system with five distinct roles:
+- Access and refresh tokens are signed with `AUTH_SECRET`.
+- Access token verification enforces issuer/audience and expected claims.
+- Session IDs (`jti`) are used for session tracking.
+- Token blacklist and session blacklist checks are enforced on authenticated routes.
+- Refresh token rotation with family tracking and reuse detection is implemented.
 
-| Role        | Permissions                                                   |
-| ----------- | ------------------------------------------------------------- |
-| **Admin**   | Full system access, user management, audit logs, all features |
-| **Manager** | Document management, anomaly handling, analytics, exports     |
-| **Analyst** | View documents, acknowledge anomalies, analytics, exports     |
-| **Viewer**  | Read-only access to dashboards and reports                    |
-| **Auditor** | Read-only access including audit logs for compliance          |
+### 2. Authorization
 
-### JWT Token Security
+- Route-level role guards (for example admin/manager/auditor restrictions).
+- API keys are stored hashed (`api_keys.keyHash`) and validated by scope.
+- Scope checks are applied per route group.
 
-- **Short-lived access tokens** (15 minutes default)
-- **Secure refresh token rotation** with automatic invalidation
-- **HttpOnly, Secure, SameSite cookies** for token storage
-- **Token blacklisting** on logout via Redis
+### 3. CSRF protection
 
-### Account Lockout Protection
+- Double-submit cookie CSRF for state-changing requests.
+- Token endpoint: `/api/v1/csrf/token`.
+- CSRF checks are skipped for API key authenticated requests and selected safe paths.
 
-Protects against brute-force attacks:
+### 4. Password and lockout defenses
 
-- Defaults:
-  - Max attempts: 5
-  - Attempt window: 15 minutes
-  - Initial lockout: 15 minutes (progressive lockout for repeat offenders)
+- Registration path enforces a strong password policy (`validatePassword`).
+- Passwords are hashed with Argon2.
+- Failed login attempts are tracked in Redis.
+- Progressive lockout and permanent lockout escalation are implemented.
+- Admin unlock endpoint is available for locked accounts.
 
-### Password Policy
+### 5. Transport and header hardening
 
-Strong password requirements enforced (defaults):
+- Helmet is enabled with CSP and other security headers.
+- HSTS is enabled in production.
+- Cookie handling is configured with secure defaults.
 
-- Minimum 12 characters
-- At least 1 uppercase letter
-- At least 1 lowercase letter
-- At least 1 number
-- At least 1 special character
-- Note: password history tracking / breached-password checks are not implemented yet.
+### 6. Rate limiting
 
----
+- Global default rate limit hook is active.
+- Endpoint-specific limits for auth, upload, export, and API-key traffic.
+- Production behavior is fail-closed on critical rate-limit backend errors.
 
-## API Security
+### 7. Secrets and sensitive data handling
 
-### API Key Authentication
+- Secrets are read from `/run/secrets/*` with env fallback.
+- Secure logger serializers redact auth headers/tokens/password-like fields.
+- Optional AES-256-GCM field encryption with key versioning is available.
 
-For machine-to-machine communication:
+### 8. Auditing and traceability
 
-- **Scoped permissions**: `read`, `write`, `delete`, `admin`
-- **Resource-specific scopes**: `documents:read`, `anomalies:write`, etc.
-- **Automatic key hashing** with SHA-256 (no plaintext keys stored)
-- **Key rotation support** without downtime
-- **Audit trail** for all API key operations
+- Audit logs capture sensitive lifecycle operations.
+- Request context fields (request id, ip, user-agent) are propagated into audit events.
+- GDPR deletion flow records and anonymizes relevant traces as implemented.
 
-### CSRF Protection
+### 9. Monitoring endpoint safety
 
-Cross-Site Request Forgery prevention:
+- `/metrics` is token-gated when `METRICS_TOKEN` is configured.
+- In production, `/metrics` is disabled (503) when token is missing.
 
-- Double-submit cookie pattern
-- Per-request token generation
-- Automatic validation on state-changing operations
-- Exemptions for API key authenticated requests
+## Configuration requirements
 
-### Request ID Tracking
+Minimum production requirements:
 
-Every request receives a unique ID:
+- Strong `AUTH_SECRET` (32+ chars).
+- Proper `DATABASE_URL`, `REDIS_URL`, and S3 credentials.
+- `METRICS_TOKEN` set for Prometheus scraping.
+- `NODE_ENV=production`.
 
-- Correlation across distributed systems
-- Included in all log entries
-- Returned in response headers (`X-Request-ID`)
-- Supports incoming `X-Request-ID` for external correlation
+Recommended:
 
----
+- `FIELD_ENCRYPTION_KEY` configured.
+- Reverse proxy correctly configured with `TRUST_PROXY`.
+- `OPENAPI_DOCS_ENABLED` left disabled unless explicitly needed.
 
-## Data Protection
+## Current limitations and hardening opportunities
 
-### Field-Level Encryption
+These are areas to improve further:
 
-Sensitive data encrypted at rest using AES-256-GCM:
-
-```typescript
-Encrypted Fields:
-- Contract numbers
-- Customer numbers
-- Meter numbers
-- MFA secrets
-- Backup codes
-```
-
-Features:
-
-- **Key versioning** for rotation support
-- **Automatic re-encryption** when keys rotate
-- **Transparent encryption/decryption** via Prisma middleware
-- **Base64 encoding** for database storage
-
-### Secure Logging
-
-Automatic redaction of sensitive data in logs:
-
-| Data Type       | Redaction Pattern   |
-| --------------- | ------------------- |
-| Passwords       | `[REDACTED]`        |
-| Tokens          | `Bearer [REDACTED]` |
-| API Keys        | `[REDACTED]`        |
-| Email addresses | `j***@example.com`  |
-| MFA codes       | `[REDACTED]`        |
-| Cookies         | `[REDACTED]`        |
-
-### Database Security
-
-- **Parameterized queries** via Prisma ORM (SQL injection prevention)
-- **Connection pooling** with health checks
-- **Encrypted connections** in production
-- **Minimal privilege principle** for database users
-
----
-
-## Session Management
-
-### Session Fixation Prevention
-
-- New session ID generated on authentication state changes
-- Old session tokens invalidated on privilege escalation
-- Session metadata recorded (IP address + user agent)
-
-### Active Session Management
-
-Users can view and manage their sessions:
-
-```
-GET /api/v1/users/me/sessions     # List active sessions
-DELETE /api/v1/users/me/sessions/:id  # Revoke specific session
-DELETE /api/v1/users/me/sessions      # Revoke all sessions
-```
-
-Session information includes:
-
-- Device/browser information
-- IP address (privacy-compliant)
-- Last activity timestamp
-- Creation timestamp
-
-### Token Rotation
-
-Automatic refresh token rotation:
-
-```
-1. User authenticates → receives access + refresh tokens
-2. Access token expires (15min)
-3. Client uses refresh token to get new tokens
-4. Old refresh token is immediately invalidated
-5. New access + refresh tokens issued
-```
-
----
-
-## Input Validation & Sanitization
-
-### Schema Validation
-
-All inputs validated using Zod schemas:
-
-- Request body validation
-- Query parameter validation
-- Path parameter validation
-- Type coercion and transformation
-
-### XSS Prevention
-
-- HTML entity encoding for user-provided content
-- Content-Security-Policy headers
-- No inline scripts allowed
-- DOM-based XSS protection
-
-### Security Headers
-
-Applied via Helmet.js:
-
-```
-Content-Security-Policy: default-src 'self'; script-src 'self'; ...
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-X-XSS-Protection: 1; mode=block
-Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-Referrer-Policy: strict-origin-when-cross-origin
-```
-
----
-
-## Audit Logging
-
-### Comprehensive Audit Trail
-
-All security-relevant actions are logged:
-
-| Category              | Events Logged                              |
-| --------------------- | ------------------------------------------ |
-| **Authentication**    | Login, logout, failed attempts, MFA events |
-| **Authorization**     | Permission changes, role assignments       |
-| **Data Access**       | Document views, exports, downloads         |
-| **Data Modification** | Create, update, delete operations          |
-| **Admin Actions**     | User management, settings changes          |
-| **Security Events**   | Password changes, API key operations       |
-
-### Audit Log Structure
-
-```json
-{
-  "id": "uuid",
-  "performedAt": "2024-12-10T12:00:00Z",
-  "action": "USER_LOGIN",
-  "resource": "auth",
-  "resourceId": "user-123",
-  "userId": "user-123",
-  "ipAddress": "192.168.1.1",
-  "userAgent": "Mozilla/5.0...",
-  "changes": { "before": {}, "after": {} },
-  "metadata": { "requestId": "req-456" }
-}
-```
-
-### Retention & Archival
-
-- Configurable retention periods
-- Automatic archival before deletion
-- Immutable audit records
-- Admin and auditor access only
-
----
-
-## Rate Limiting & DDoS Protection
-
-### Sliding Window Rate Limiting
-
-Redis-backed rate limiting with default limits:
-
-| Endpoint Category  | Requests | Window     |
-| ------------------ | -------- | ---------- |
-| **Authentication** | 5        | 15 minutes |
-| **Password Reset** | 3        | 1 hour     |
-| **API (default)**  | 100      | 1 minute   |
-| **Uploads**        | 10       | 1 minute   |
-
-### Rate Limit Response
-
-When limits are exceeded:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 60
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 1702209600
-```
-
-### Fail-Closed Behavior
-
-If Redis is unavailable, requests are blocked rather than allowed in production:
-
-```typescript
-rateLimitConfig: {
-  failClosed: true,  // Block on Redis failure
-  fallbackLimit: 10  // Conservative limit if failClosed is false
-}
-```
-
----
-
-## File Upload Security
-
-### File Validation
-
-Multi-layer validation for all uploads:
-
-1. **Extension whitelist**: `.pdf`, `.xlsx`, `.xls`, `.csv`
-2. **MIME type validation**: Must match allowed content types
-3. **Magic byte verification**: Actual file content inspection
-4. **Size limits**: 10MB default
-5. **Filename sanitization**: Remove path traversal, special characters
-
-### Malware Protection
-
-- File content scanning
-- Executable content detection
-- Embedded macro detection (Office files)
-- Archive inspection (no nested bombs)
-
-### Secure Storage
-
-- Files stored in isolated S3-compatible storage
-- Unique, non-guessable file paths
-- Content-Disposition headers for safe downloads
-- Signed URLs for temporary access
-
----
-
-## Multi-Factor Authentication (MFA)
-
-### TOTP Support
-
-Time-based One-Time Password (RFC 6238):
-
-- Compatible with Google Authenticator, Authy, 1Password
-- QR code provisioning
-- 30-second token windows
-- Configurable time drift tolerance
-
-### Backup Codes
-
-Emergency access when device unavailable:
-
-- 10 single-use backup codes
-- Secure generation using crypto.randomBytes
-- Encrypted storage
-- Regeneration invalidates previous codes
-
-### MFA Management Endpoints
-
-```
-POST /api/v1/mfa/setup          # Generate QR code and secret
-POST /api/v1/mfa/verify         # Verify and enable MFA
-POST /api/v1/mfa/disable        # Disable MFA (requires verification)
-POST /api/v1/mfa/backup-codes   # Regenerate backup codes
-GET  /api/v1/mfa/status         # Check MFA status
-```
-
----
-
-## GDPR Compliance
-
-### Data Subject Rights
-
-Full support for GDPR data subject rights:
-
-#### Right to Access (Art. 15)
-
-```
-GET /api/v1/users/me/data-export
-```
-
-Returns all personal data in machine-readable JSON format.
-
-#### Right to Erasure (Art. 17)
-
-```
-POST /api/v1/users/me/deletion-request
-```
-
-Triggers account deletion workflow with:
-
-- Confirmation email with secure token
-- 24-hour cooling-off period
-- Cascading deletion of all related data
-- Audit log preserved (anonymized)
-
-#### Right to Rectification (Art. 16)
-
-```
-PATCH /api/v1/users/me
-```
-
-Users can update their personal information.
-
-### Data Retention
-
-Configurable retention periods with automatic cleanup:
-
-| Data Type               | Default Retention |
-| ----------------------- | ----------------- |
-| Audit logs              | 365 days          |
-| Login attempts          | 90 days           |
-| Password reset tokens   | 7 days            |
-| Processed outbox events | 30 days           |
-| Token blacklist entries | Until expiry      |
-
-### Anonymization
-
-When deletion is requested:
-
-- Personal identifiers replaced with anonymized values
-- Email: `deleted-{hash}@deleted.local`
-- Name: `Deleted User`
-- IP addresses in logs: hashed or removed
-- Related records: cascade delete or anonymize
-
----
-
-## Infrastructure Security
-
-### Container Security
-
-- **Non-root execution**: All containers run as unprivileged users
-- **Read-only filesystems**: Where applicable
-- **Resource limits**: CPU and memory constraints
-- **Health checks**: Automatic restart on failure
-- **Minimal base images**: Alpine-based for smaller attack surface
-
-### Secrets Management
-
-Production secrets management:
-
-```yaml
-# docker-compose.prod.yml
-services:
-  api:
-    secrets:
-      - db_password
-      - jwt_secret
-      - field_encryption_key
-secrets:
-  db_password:
-    file: ./secrets/db_password.txt
-```
-
-### Network Security
-
-- **Localhost binding**: Development services bound to 127.0.0.1
-- **Traefik reverse proxy**: TLS termination, rate limiting
-- **Let's Encrypt integration**: Automatic certificate management
-- **HSTS enabled**: Force HTTPS connections
-
-### CI/CD Security
-
-- **Trivy scanning**: Container and filesystem vulnerability detection
-- **TruffleHog**: Secret detection in code
-- **npm audit**: Dependency vulnerability scanning
-- **Pinned action versions**: Supply chain attack prevention
-
----
-
-## Security Configuration
-
-### Environment Variables
-
-| Variable                   | Description                    | Default                |
-| -------------------------- | ------------------------------ | ---------------------- |
-| `AUTH_SECRET`              | JWT signing secret             | Required in production |
-| `COOKIE_SECRET`            | Cookie signing secret          | Required in production |
-| `FIELD_ENCRYPTION_KEY`     | AES-256 encryption key         | Required in production |
-| `PASSWORD_MIN_LENGTH`      | Minimum password length        | 12                     |
-| `LOCKOUT_MAX_ATTEMPTS`     | Failed attempts before lockout | 5                      |
-| `LOCKOUT_DURATION_MINUTES` | Lockout duration               | 15                     |
-| `RATE_LIMIT_DEFAULT`       | Default rate limit             | 100/minute             |
-| `MFA_REQUIRED`             | Require MFA for all users      | false                  |
-
-### Production Checklist
-
-Before deploying to production, ensure:
-
-- [ ] `NODE_ENV=production` is set
-- [ ] All `*_SECRET` variables use strong random values (32+ chars)
-- [ ] `FIELD_ENCRYPTION_KEY` is set (64 hex chars for AES-256)
-- [ ] Database uses SSL/TLS connections
-- [ ] Redis requires authentication
-- [ ] S3/MinIO credentials are production-specific
-- [ ] Rate limiting is configured appropriately
-- [ ] Audit logging is enabled
-- [ ] Log aggregation is configured
-- [ ] Monitoring and alerting are set up
-- [ ] Backup procedures are tested
-
----
-
-## Security Testing
-
-### Test Coverage
-
-The security implementation includes comprehensive tests:
-
-```
-537 tests passing
-
-Test Categories:
-- Authentication flows (login, logout, token refresh)
-- Authorization (RBAC, permissions)
-- Rate limiting (sliding window, fail-closed)
-- Input validation (XSS, injection)
-- File upload security (type validation, sanitization)
-- MFA (TOTP, backup codes)
-- Audit logging (completeness, accuracy)
-- Session management (fixation, rotation)
-- GDPR workflows (export, deletion)
-- Encryption (field-level, key rotation)
-```
-
-### Security Scanning
-
-Automated security scanning in CI/CD:
-
-```yaml
-# Vulnerability scanning
-- npm audit --audit-level=moderate
-- trivy fs --exit-code 1 --severity HIGH,CRITICAL
-- trufflehog git file://. --fail
-```
-
----
-
-## Reporting Security Issues
-
-If you discover a security vulnerability, please report it responsibly:
-
-1. **Do not** create a public GitHub issue
-2. Email security concerns to the development team
-3. Include detailed reproduction steps
-4. Allow 90 days for remediation before disclosure
-
----
-
-## Compliance
-
-Cost Watchdog is designed to support compliance with:
-
-- **GDPR** (General Data Protection Regulation)
-- **ISO 27001** (Information Security Management)
-- **SOC 2** (Service Organization Control)
-- **OWASP Top 10** (Web Application Security)
-
----
-
-<p align="center">
-  <sub>Security is not a feature, it's a requirement.</sub>
-</p>
+- No built-in malware/virus scanning of uploaded files.
+- No WAF/DDoS layer in-repo; deploy behind managed edge controls.
+- Some admin user-management paths currently use basic password length checks instead of the full registration password policy.
+- Threat-model documentation and formal security test suite can be expanded.
+
+## Verification references
+
+Key implementation files:
+
+- `apps/api/src/index.ts`
+- `apps/api/src/middleware/auth.ts`
+- `apps/api/src/middleware/csrf.ts`
+- `apps/api/src/lib/rate-limit.ts`
+- `apps/api/src/lib/account-lockout.ts`
+- `apps/api/src/lib/token-rotation.ts`
+- `apps/api/src/middleware/secure-logging.ts`
+- `apps/api/src/routes/metrics.ts`
+- `apps/api/src/lib/secrets.ts`

@@ -1,409 +1,93 @@
-## Teil 3: Systemarchitektur
+# Architecture
 
-### 3.1 Architektur-Prinzipien
+This document reflects the current runtime architecture in `main`.
 
-| Prinzip                    | Umsetzung                                                                |
-| -------------------------- | ------------------------------------------------------------------------ |
-| **Modularität**            | Jede Funktion ist ein eigenständiges Modul mit definierter Schnittstelle |
-| **Plugin-Architektur**     | Neue Datenquellen = neuer Connector, keine Core-Änderung                 |
-| **Event-Driven**           | Asynchrone Verarbeitung über Message Queue                               |
-| **Audit-First**            | Jede Datenänderung wird geloggt, bevor sie passiert                      |
-| **Multi-Tenant by Design** | Tenant-Isolation von Tag 1, Row-Level Security auf DB-Ebene              |
-| **API-First**              | Jede Funktion ist über API erreichbar, UI ist nur ein Client             |
+## System overview
 
-### 3.2 High-Level Architektur
+Cost Watchdog is a single-tenant deployment model (one installation per customer environment).
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENTS                                        │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                    │
-│  │ Web App  │  │ Mobile   │  │ API      │  │ Webhooks │                    │
-│  │ (Next.js)│  │ (PWA)    │  │ Clients  │  │ (Zapier) │                    │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘                    │
-│       └─────────────┴─────────────┴─────────────┘                          │
-│                              │                                              │
-└──────────────────────────────┼──────────────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼──────────────────────────────────────────────┐
-│                         API GATEWAY                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  • Authentication (JWT + SSO)                                        │   │
-│  │  • Rate Limiting                                                     │   │
-│  │  • Tenant Resolution                                                 │   │
-│  │  • Request Routing                                                   │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────┼──────────────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼──────────────────────────────────────────────┐
-│                        CORE SERVICES                                        │
-│                                                                             │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
-│  │ ORGANIZATION    │  │ DOCUMENT        │  │ COST RECORD     │             │
-│  │ SERVICE         │  │ SERVICE         │  │ SERVICE         │             │
-│  │ ───────────     │  │ ───────────     │  │ ───────────     │             │
-│  │ • Tenants       │  │ • Upload        │  │ • CRUD          │             │
-│  │ • Locations     │  │ • OCR Pipeline  │  │ • Validation    │             │
-│  │ • Cost Centers  │  │ • LLM Extract   │  │ • Normalization │             │
-│  │ • Users/Roles   │  │ • Verification  │  │ • History       │             │
-│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘             │
-│           │                    │                    │                       │
-│  ┌────────┴────────────────────┴────────────────────┴────────┐             │
-│  │                      EVENT BUS (Redis)                     │             │
-│  └────────┬────────────────────┬────────────────────┬────────┘             │
-│           │                    │                    │                       │
-│  ┌────────┴────────┐  ┌────────┴────────┐  ┌────────┴────────┐             │
-│  │ ANOMALY         │  │ ALERTING        │  │ REPORTING       │             │
-│  │ ENGINE          │  │ SERVICE         │  │ SERVICE         │             │
-│  │ ───────────     │  │ ───────────     │  │ ───────────     │             │
-│  │ • Trend Analysis│  │ • Rule Engine   │  │ • Dashboard     │             │
-│  │ • Statistical   │  │ • E-Mail        │  │ • PDF Export    │             │
-│  │ • YoY/MoM       │  │ • Slack/Teams   │  │ • Excel Export  │             │
-│  │ • Price/Unit    │  │ • Webhooks      │  │ • Scheduled     │             │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    ESG MODULE (Add-On, V2.0+)                        │   │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐      │   │
-│  │  │ Emission Calc   │  │ Factor Database │  │ ESRS Export     │      │   │
-│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└──────────────────────────────┬──────────────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼──────────────────────────────────────────────┐
-│                      CONNECTOR LAYER (Plugin-Architektur)                   │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                     CONNECTOR REGISTRY                               │   │
-│  │  Lädt und verwaltet alle Connector-Plugins                          │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │ PDF         │ │ Excel/CSV   │ │ Manual      │ │ API         │  V1.0    │
-│  │ Connector   │ │ Connector   │ │ Entry       │ │ Connector   │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                             │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │ Smart Meter │ │ DKV Fuel    │ │ E-Mail      │ │ ERP         │  V2.0+   │
-│  │ Connector   │ │ Connector   │ │ Inbox       │ │ Connectors  │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                             │
-└──────────────────────────────┬──────────────────────────────────────────────┘
-                               │
-┌──────────────────────────────┼──────────────────────────────────────────────┐
-│                         DATA LAYER                                          │
-│                                                                             │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
-│  │ PostgreSQL      │  │ Redis           │  │ S3 / MinIO      │             │
-│  │ ───────────     │  │ ───────────     │  │ ───────────     │             │
-│  │ • All Entities  │  │ • Event Bus     │  │ • Documents     │             │
-│  │ • Audit Logs    │  │ • Job Queue     │  │ • Exports       │             │
-│  │ • RLS Policies  │  │ • Cache         │  │ • Backups       │             │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
-│                                                                             │
-│  Row-Level Security (RLS):                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  CREATE POLICY tenant_isolation ON all_tables                        │   │
-│  │  USING (tenant_id = current_setting('app.current_tenant')::uuid)    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Core runtime components:
 
-### 3.3 Connector-Interface (Plugin-System)
+- `apps/web`: Next.js frontend (dashboard, documents, anomalies, admin settings).
+- `apps/api`: Fastify API for auth, ingest, analytics, export, and admin operations.
+- `apps/api` workers: asynchronous pipeline processors.
+- PostgreSQL: transactional data store (Prisma schema in `apps/api/prisma/schema.prisma`).
+- Redis: queue backend, lockout/rate-limit/session primitives, cache support.
+- S3-compatible storage (MinIO in local dev): source documents.
 
-```typescript
-// packages/connector-sdk/src/types.ts
+## Request and processing flow
 
-/**
- * Basis-Interface das jeder Connector implementieren muss.
- * Ermöglicht Plugin-Architektur ohne Core-Änderungen.
- */
-interface Connector {
-  /** Eindeutige ID des Connectors */
-  id: string;
+### 1. Upload and persist
 
-  /** Anzeigename */
-  name: string;
+1. Client uploads through `POST /api/v1/documents/upload`.
+2. API validates type/size, stores file in object storage, creates `documents` row.
+3. API inserts `outbox_events` row (`document.uploaded`) in the same transaction.
 
-  /** Connector-Typ */
-  type: 'file' | 'api' | 'manual' | 'iot' | 'email';
+### 2. Outbox dispatch
 
-  /** Welche Kostenarten dieser Connector liefern kann */
-  supportedCostTypes: CostType[];
+1. `OutboxPoller` continuously claims unprocessed outbox events.
+2. Events are dispatched to BullMQ queues with idempotent job IDs (`outbox_<eventId>`).
+3. Processed events are marked complete; failed events are rescheduled with retries.
 
-  /** Version für Kompatibilität */
-  version: string;
+### 3. Extraction
 
-  /** Connector-spezifische Konfiguration */
-  configSchema: JSONSchema;
+`extraction` worker behavior by MIME type:
 
-  /**
-   * Extrahiert Kostendaten aus der Quelle.
-   * @returns Standardisierte CostRecord[]
-   */
-  extract(input: ConnectorInput): Promise<ExtractionResult>;
+- CSV (`text/csv`): parse and map headers, then persist `cost_records`.
+- PDF (`application/pdf`): LLM extraction only, confidence/warning gates enforced.
+- If extraction is ambiguous or unsupported, document is moved to `manual` state.
 
-  /**
-   * Validiert die Konfiguration.
-   */
-  validateConfig(config: unknown): ValidationResult;
+### 4. Anomaly detection
 
-  /**
-   * Prüft ob Verbindung zur Quelle funktioniert.
-   */
-  testConnection(config: unknown): Promise<ConnectionTestResult>;
-}
+1. New cost records emit `cost_record.created` outbox events.
+2. `anomaly-detection` worker loads record context + history.
+3. Shared anomaly engine (`packages/core/src/anomaly`) executes enabled checks.
+4. Detected anomalies are upserted in `anomalies`.
+5. Non-backfill warning/critical anomalies emit `anomaly.detected` events.
 
-/**
- * Ergebnis einer Extraktion – einheitlich für alle Connectors.
- */
-interface ExtractionResult {
-  success: boolean;
-  records: CostRecord[];
-  metadata: {
-    sourceType: string;
-    extractionTimestamp: Date;
-    confidence: number; // 0-1
-    warnings: string[];
-    rawData?: unknown; // Für Debugging
-  };
-  audit: {
-    connectorId: string;
-    connectorVersion: string;
-    inputHash: string; // Hash der Eingabedaten
-    // LLM-Audit-Felder (ChatGPT-Feedback)
-    llmModel?: string;
-    llmPromptVersion?: string;
-    llmTemperature?: number;
-    llmResponseHash?: string;
-  };
-}
+### 5. Alerting
 
-/**
- * Einheitliches Kostenrecord – Output aller Connectors.
- */
-interface CostRecord {
-  // Identifikation
-  externalId?: string; // ID aus Quellsystem (Rechnungsnummer)
+1. Outbox creates channel-specific `alerts` based on app settings.
+2. `alerts` worker sends email/slack/teams notifications.
+3. Delivery state is tracked in `alerts.status`.
 
-  // Zeitraum
-  periodStart: Date;
-  periodEnd: Date;
-  invoiceDate?: Date;
-  dueDate?: Date;
+### 6. Aggregation and analytics
 
-  // Kosten
-  amount: number;
-  currency: string; // ISO 4217
-  amountNet?: number; // Netto (ohne MwSt)
-  vatAmount?: number;
-  vatRate?: number;
+1. `aggregation` worker updates `cost_record_monthly_agg`.
+2. API analytics endpoints read mostly from aggregate tables.
+3. This reduces heavy live aggregation against raw `cost_records`.
 
-  // Verbrauch (wenn relevant)
-  quantity?: number;
-  unit?: ConsumptionUnit; // kWh, m³, Liter, Stück
-  pricePerUnit?: number; // €/kWh, €/m³, etc.
+## Ingest policy
 
-  // Klassifikation
-  costType: CostType;
-  costCategory?: string; // Feinere Kategorisierung
+Current policy is intentionally strict:
 
-  // Quelle
-  sourceDocumentId?: string; // Verknüpfung zum Originaldokument
-  sourceLocation?: {
-    // Wo im Dokument
-    page?: number;
-    coordinates?: BoundingBox;
-    rawText?: string;
-  };
+- Primary ingest path: CSV.
+- PDF ingest allowed only when `ANTHROPIC_API_KEY` is configured.
+- Unsupported legacy spreadsheet/image types are routed to manual handling, not auto-processed.
 
-  // Lieferant
-  supplier: {
-    name: string;
-    supplierId?: string; // Interne ID
-    taxId?: string; // UID-Nummer
-  };
+## Worker topology
 
-  // Zuordnung
-  locationId?: string;
-  costCenterId?: string;
-  contractId?: string;
+Workers are started from `apps/api/src/workers/index.ts`:
 
-  // Metadaten
-  meterNumber?: string;
-  contractNumber?: string;
-  customerNumber?: string;
+- extraction worker
+- anomaly worker
+- alert worker
+- aggregation worker
+- outbox poller
+- retention worker (scheduled cleanup)
+- daily digest worker
 
-  // Qualität
-  confidence: number; // 0-1, wie sicher ist die Extraktion
-  manuallyVerified: boolean;
-  extractionMethod: 'llm' | 'manual' | 'api';
-}
+API and workers run as separate processes.
 
-type CostType =
-  | 'electricity'
-  | 'natural_gas'
-  | 'heating_oil'
-  | 'district_heating'
-  | 'district_cooling'
-  | 'water'
-  | 'sewage'
-  | 'waste'
-  | 'fuel_diesel'
-  | 'fuel_petrol'
-  | 'fuel_lpg'
-  | 'fuel_electric'
-  | 'telecom_mobile'
-  | 'telecom_landline'
-  | 'telecom_internet'
-  | 'rent'
-  | 'operating_costs'
-  | 'maintenance'
-  | 'insurance'
-  | 'it_licenses'
-  | 'it_cloud'
-  | 'it_hardware'
-  | 'supplier_recurring'
-  | 'other';
+## Reliability patterns
 
-type ConsumptionUnit = 'kWh' | 'MWh' | 'm³' | 'liter' | 'kg' | 'tonne' | 'piece' | 'user' | 'GB';
-```
+- Transactional outbox between write operations and async processing.
+- Queue retry/backoff defaults in `apps/api/src/lib/queues.ts`.
+- Idempotent queue job IDs derived from outbox event IDs.
+- Fail-closed behavior for critical controls in production (for example `/metrics` token requirement).
 
-### 3.4 PDF-Extraktion Pipeline (ChatGPT-Feedback eingearbeitet)
+## Runtime boundaries
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       PDF EXTRACTION PIPELINE                               │
-│                                                                             │
-│  ┌─────────────────┐                                                       │
-│  │  PDF Upload     │                                                       │
-│  └────────┬────────┘                                                       │
-│           │                                                                 │
-│           ▼                                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  STEP 1: PDF TYPE DETECTION                                          │   │
-│  │  ──────────────────────────                                          │   │
-│  │                                                                       │   │
-│  │  Prüfe: Hat PDF eingebetteten Text?                                  │   │
-│  │                                                                       │   │
-│  │  ├─ JA (Digitales PDF) ────────────────────┐                         │   │
-│  │  │   • 90% aller DACH-Energierechnungen    │                         │   │
-│  │  │   • Direkte Text-Extraktion möglich     │                         │   │
-│  │  │                                         │                         │   │
-│  │  └─ NEIN (Scan/Bild-PDF) ──────────────┐   │                         │   │
-│  │      • Alte Belege, Lieferscheine      │   │                         │   │
-│  │      • OCR notwendig                   │   │                         │   │
-│  │                                        │   │                         │   │
-│  └────────────────────────────────────────┴───┴─────────────────────────┘   │
-│           │                                   │                              │
-│           ▼                                   ▼                              │
-│  ┌─────────────────────┐           ┌─────────────────────┐                  │
-│  │  Digital Text Path  │           │  Scanned Image Path │                  │
-│  │  ─────────────────  │           │  ────────────────── │                  │
-│  │  pdf.js / pdfplumber│           │  Tesseract / Paddle │                  │
-│  │  → Strukturierter   │           │  → OCR Text         │                  │
-│  │    Text + Layout    │           │  → Lower Confidence │                  │
-│  └──────────┬──────────┘           └──────────┬──────────┘                  │
-│             │                                  │                             │
-│             └──────────────┬───────────────────┘                             │
-│                            │                                                 │
-│                            ▼                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  STEP 2: SUPPLIER DETECTION                                          │   │
-│  │  ──────────────────────────                                          │   │
-│  │                                                                       │   │
-│  │  Erkenne Lieferanten aus:                                            │   │
-│  │  • Logo (wenn Bild)                                                  │   │
-│  │  • Header-Text (Wien Energie, E.ON, Vodafone, etc.)                  │   │
-│  │  • UID-Nummer                                                        │   │
-│  │  • IBAN                                                              │   │
-│  │                                                                       │   │
-│  │  ├─ BEKANNTER LIEFERANT ──────────────────┐                          │   │
-│  │  │   Template-basierte Extraktion         │                          │   │
-│  │  │   (Regex + Positionen)                 │                          │   │
-│  │  │   → 95%+ Genauigkeit                   │                          │   │
-│  │  │   → Schnell, deterministisch           │                          │   │
-│  │  │                                        │                          │   │
-│  │  └─ UNBEKANNTER LIEFERANT ────────────┐   │                          │   │
-│  │      LLM-basierte Extraktion          │   │                          │   │
-│  │      → 85-95% Genauigkeit             │   │                          │   │
-│  │      → Langsamer, teurer              │   │                          │   │
-│  │                                       │   │                          │   │
-│  └───────────────────────────────────────┴───┴──────────────────────────┘   │
-│           │                                   │                              │
-│           ▼                                   ▼                              │
-│  ┌─────────────────────┐           ┌─────────────────────┐                  │
-│  │  Template Parser    │           │  LLM Extractor      │                  │
-│  │  ────────────────   │           │  ──────────────     │                  │
-│  │  • Regex-Patterns   │           │  • Claude/GPT-4     │                  │
-│  │  • Position-based   │           │  • Structured Output│                  │
-│  │  • Deterministic    │           │  • Audit-Logging    │                  │
-│  │  • No API Cost      │           │  • Retry-Logic      │                  │
-│  └──────────┬──────────┘           └──────────┬──────────┘                  │
-│             │                                  │                             │
-│             └──────────────┬───────────────────┘                             │
-│                            │                                                 │
-│                            ▼                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  STEP 3: VALIDATION & NORMALIZATION                                  │   │
-│  │  ────────────────────────────────                                    │   │
-│  │                                                                       │   │
-│  │  • Pflichtfelder vorhanden?                                          │   │
-│  │  • Beträge plausibel? (nicht negativ, nicht absurd hoch)            │   │
-│  │  • Datum valide?                                                     │   │
-│  │  • Einheiten normalisiert?                                           │   │
-│  │  • Preis/Einheit berechnet                                           │   │
-│  │                                                                       │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                            │                                                 │
-│                            ▼                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  STEP 4: AUDIT LOGGING (ChatGPT-Feedback)                            │   │
-│  │  ────────────────────────────────────────                            │   │
-│  │                                                                       │   │
-│  │  ExtractionAudit {                                                   │   │
-│  │    documentId: "doc_xyz",                                            │   │
-│  │    extractionMethod: "llm",                                            │   │
-│  │    llmModel?: "claude-3-5-sonnet",                                   │   │
-│  │    llmPromptVersion?: "cost_extraction_v1.3",                        │   │
-│  │    llmTemperature?: 0.0,                                             │   │
-│  │    llmInputHash: "sha256:abc123...",                                 │   │
-│  │    llmOutputHash: "sha256:def456...",                                │   │
-│  │    llmRawResponse: { ... },  // Für Debugging                        │   │
-│  │    confidence: 0.94,                                                 │   │
-│  │    extractedFields: ["amount", "period", "supplier", "quantity"],    │   │
-│  │    missingFields: [],                                                │   │
-│  │    warnings: [],                                                     │   │
-│  │    timestamp: "2026-03-15T10:23:45Z"                                 │   │
-│  │  }                                                                   │   │
-│  │                                                                       │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                            │                                                 │
-│                            ▼                                                 │
-│  ┌─────────────────┐                                                       │
-│  │  CostRecord     │                                                       │
-│  │  (normalisiert) │                                                       │
-│  └─────────────────┘                                                       │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 3.5 LLM-Only PDF Extraktion (V1)
-
-```typescript
-// packages/connectors/src/pdf/extract.ts
-
-const config: PdfExtractionConfig = {
-  anthropicApiKey: secrets.getAnthropicApiKey(),
-  minConfidence: 0.75,
-};
-
-const result = await extractFromPdf(input, config);
-// Ergebnis wird nur akzeptiert, wenn confidence >= minConfidence
-// und keine kritischen Warnungen vorliegen.
-```
-
-PDF-Verarbeitung ist LLM-only.
-
----
+- API handles synchronous validation, auth, access control, and query endpoints.
+- Workers handle heavy/slow operations (extraction, anomaly computation, notification delivery).
+- Shared domain logic lives in workspace packages (`core`, `connectors`, `connector-sdk`).
