@@ -188,7 +188,7 @@ async function secureLoggingMiddleware(fastify: FastifyInstance): Promise<void> 
 
 export default fp(secureLoggingMiddleware, {
   name: 'secure-logging',
-  fastify: '4.x',
+  fastify: '5.x',
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

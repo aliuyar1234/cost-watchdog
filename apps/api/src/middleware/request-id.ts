@@ -53,7 +53,7 @@ async function requestIdMiddleware(fastify: FastifyInstance): Promise<void> {
 
 export default fp(requestIdMiddleware, {
   name: 'request-id',
-  fastify: '4.x',
+  fastify: '5.x',
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

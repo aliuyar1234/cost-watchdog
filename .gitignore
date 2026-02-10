@@ -46,6 +46,7 @@ pnpm-debug.log*
 coverage/
 playwright-report/
 test-results/
+showcase-screenshots/
 
 # Prisma
 prisma/migrations/**/migration_lock.toml

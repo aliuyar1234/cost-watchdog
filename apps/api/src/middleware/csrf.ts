@@ -136,7 +136,7 @@ async function csrfMiddleware(fastify: FastifyInstance, options: CsrfOptions = {
 
 export default fp(csrfMiddleware, {
   name: 'csrf',
-  fastify: '4.x',
+  fastify: '5.x',
   dependencies: ['@fastify/cookie'],
 });
 

@@ -203,7 +203,7 @@ export function requireRole(...allowedRoles: string[]): preHandlerHookHandler {
  */
 async function authPlugin(fastify: FastifyInstance): Promise<void> {
   // Decorate request with user property
-  fastify.decorateRequest('user', null);
+  fastify.decorateRequest('user', null, []);
 
   // Add auth hooks as decorators
   fastify.decorate('authenticate', authenticate);

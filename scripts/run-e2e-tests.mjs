@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'child_process';
+import net from 'net';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -17,29 +18,90 @@ const DEFAULT_S3_ACCESS_KEY = 'minio_admin';
 const DEFAULT_S3_SECRET_KEY = 'minio_admin_dev';
 const DEFAULT_S3_REGION = 'eu-central-1';
 
-const DEFAULT_WEB_URL = 'http://localhost:3000';
-const DEFAULT_NEXT_PUBLIC_API_URL = 'http://localhost:3001/api/v1';
+const DEFAULT_WEB_PORT = 3000;
+const DEFAULT_API_PORT = 3001;
+const DEFAULT_HOST = 'localhost';
 
 const PNPM_CMD = 'pnpm';
 
-const env = {
-  ...process.env,
-  NODE_ENV: process.env.NODE_ENV || 'test',
-  DATABASE_URL: process.env.DATABASE_URL || DEFAULT_DATABASE_URL,
-  REDIS_URL: process.env.REDIS_URL || DEFAULT_REDIS_URL,
-  AUTH_SECRET: process.env.AUTH_SECRET || DEFAULT_AUTH_SECRET,
-  COOKIE_SECRET: process.env.COOKIE_SECRET || DEFAULT_AUTH_SECRET,
-  S3_ENDPOINT: process.env.S3_ENDPOINT || DEFAULT_S3_ENDPOINT,
-  S3_BUCKET: process.env.S3_BUCKET || DEFAULT_S3_BUCKET,
-  S3_ACCESS_KEY: process.env.S3_ACCESS_KEY || DEFAULT_S3_ACCESS_KEY,
-  S3_SECRET_KEY: process.env.S3_SECRET_KEY || DEFAULT_S3_SECRET_KEY,
-  S3_REGION: process.env.S3_REGION || DEFAULT_S3_REGION,
-  WEB_URL: process.env.WEB_URL || DEFAULT_WEB_URL,
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || DEFAULT_NEXT_PUBLIC_API_URL,
-  E2E_ADMIN_EMAIL: process.env.E2E_ADMIN_EMAIL || 'admin@example.com',
-  E2E_ADMIN_PASSWORD: process.env.E2E_ADMIN_PASSWORD || 'Password123!',
-  PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || DEFAULT_WEB_URL,
-};
+function parsePort(portValue, fallback) {
+  const parsed = Number.parseInt(String(portValue), 10);
+  return Number.isInteger(parsed) && parsed > 0 && parsed < 65536 ? parsed : fallback;
+}
+
+function isPortAvailable(port) {
+  return new Promise((resolvePort) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', () => resolvePort(false));
+    server.listen({ port }, () => {
+      server.close(() => resolvePort(true));
+    });
+  });
+}
+
+function reserveEphemeralPort() {
+  return new Promise((resolvePort, rejectPort) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', rejectPort);
+    server.listen({ port: 0 }, () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close(() => rejectPort(new Error('Failed to allocate free TCP port.')));
+        return;
+      }
+      const { port } = address;
+      server.close((error) => {
+        if (error) {
+          rejectPort(error);
+          return;
+        }
+        resolvePort(port);
+      });
+    });
+  });
+}
+
+async function resolvePort(preferredPort, usedPorts = new Set()) {
+  if (
+    typeof preferredPort === 'number' &&
+    !usedPorts.has(preferredPort) &&
+    (await isPortAvailable(preferredPort))
+  ) {
+    usedPorts.add(preferredPort);
+    return preferredPort;
+  }
+
+  let candidate = await reserveEphemeralPort();
+  while (usedPorts.has(candidate)) {
+    candidate = await reserveEphemeralPort();
+  }
+  usedPorts.add(candidate);
+  return candidate;
+}
+
+function createBaseEnv({ webUrl, apiBaseUrl, playwrightBaseUrl }) {
+  return {
+    ...process.env,
+    NODE_ENV: process.env.NODE_ENV || 'test',
+    DATABASE_URL: process.env.DATABASE_URL || DEFAULT_DATABASE_URL,
+    REDIS_URL: process.env.REDIS_URL || DEFAULT_REDIS_URL,
+    AUTH_SECRET: process.env.AUTH_SECRET || DEFAULT_AUTH_SECRET,
+    COOKIE_SECRET: process.env.COOKIE_SECRET || DEFAULT_AUTH_SECRET,
+    S3_ENDPOINT: process.env.S3_ENDPOINT || DEFAULT_S3_ENDPOINT,
+    S3_BUCKET: process.env.S3_BUCKET || DEFAULT_S3_BUCKET,
+    S3_ACCESS_KEY: process.env.S3_ACCESS_KEY || DEFAULT_S3_ACCESS_KEY,
+    S3_SECRET_KEY: process.env.S3_SECRET_KEY || DEFAULT_S3_SECRET_KEY,
+    S3_REGION: process.env.S3_REGION || DEFAULT_S3_REGION,
+    WEB_URL: process.env.WEB_URL || webUrl,
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || apiBaseUrl,
+    E2E_ADMIN_EMAIL: process.env.E2E_ADMIN_EMAIL || 'admin@example.com',
+    E2E_ADMIN_PASSWORD: process.env.E2E_ADMIN_PASSWORD || 'Password123!',
+    RATE_LIMIT_DEFAULT_MAX_REQUESTS: process.env.RATE_LIMIT_DEFAULT_MAX_REQUESTS || '10000',
+    PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || playwrightBaseUrl,
+  };
+}
 
 function runSync(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', ...options });
@@ -89,7 +151,7 @@ function resolveComposeCommand() {
 const compose = resolveComposeCommand();
 
 function runCompose(args) {
-  runSync(compose.cmd, [...compose.args, ...args], { cwd: repoRoot, env });
+  runSync(compose.cmd, [...compose.args, ...args], { cwd: repoRoot, env: process.env });
 }
 
 async function sleep(ms) {
@@ -150,6 +212,37 @@ async function main() {
   /** @type {import('child_process').ChildProcess | null} */
   let webProc = null;
 
+  const host = process.env.E2E_HOST || DEFAULT_HOST;
+  const requestedApiPort = process.env.E2E_API_PORT
+    ? parsePort(process.env.E2E_API_PORT, DEFAULT_API_PORT)
+    : undefined;
+  const requestedWebPort = process.env.E2E_WEB_PORT
+    ? parsePort(process.env.E2E_WEB_PORT, DEFAULT_WEB_PORT)
+    : undefined;
+  const usedPorts = new Set();
+  const apiPort = await resolvePort(requestedApiPort, usedPorts);
+  const webPort = await resolvePort(requestedWebPort, usedPorts);
+
+  const apiOrigin = `http://${host}:${apiPort}`;
+  const webOrigin = `http://${host}:${webPort}`;
+  const apiBaseUrl = `${apiOrigin}/api/v1`;
+  const baseEnv = createBaseEnv({
+    webUrl: webOrigin,
+    apiBaseUrl,
+    playwrightBaseUrl: webOrigin,
+  });
+  const apiEnv = {
+    ...baseEnv,
+    PORT: String(apiPort),
+  };
+  const webEnv = {
+    ...baseEnv,
+    PORT: String(webPort),
+  };
+
+  // eslint-disable-next-line no-console
+  console.log(`[e2e] Using ports api=${apiPort} web=${webPort}`);
+
   try {
     runCompose(['-f', composeFile, 'up', '-d']);
 
@@ -157,28 +250,28 @@ async function main() {
     await waitForHealthy('cost-watchdog-redis-e2e');
     await waitForHealthy('cost-watchdog-minio-e2e');
 
-    runPnpm(['--filter', '@cost-watchdog/api...', 'build'], { cwd: repoRoot, env });
-    runPnpm(['--filter', '@cost-watchdog/api', 'db:push'], { cwd: repoRoot, env });
+    runPnpm(['--filter', '@cost-watchdog/api...', 'build'], { cwd: repoRoot, env: baseEnv });
+    runPnpm(['--filter', '@cost-watchdog/api', 'db:push'], { cwd: repoRoot, env: baseEnv });
     runPnpm(['--filter', '@cost-watchdog/api', 'exec', 'tsx', 'scripts/seed-e2e.ts'], {
       cwd: repoRoot,
-      env,
+      env: baseEnv,
     });
 
     apiProc = spawnPnpm(['--filter', '@cost-watchdog/api', 'exec', 'tsx', 'src/index.ts'], {
       cwd: repoRoot,
-      env,
+      env: apiEnv,
       stdio: 'inherit',
     });
-    await waitForHttpOk('http://localhost:3001/health', 60000);
+    await waitForHttpOk(`${apiOrigin}/health`, 60000);
 
     webProc = spawnPnpm(['--filter', '@cost-watchdog/web', 'dev'], {
       cwd: repoRoot,
-      env,
+      env: webEnv,
       stdio: 'inherit',
     });
-    await waitForHttpOk('http://localhost:3000/', 120000);
+    await waitForHttpOk(`${webOrigin}/`, 120000);
 
-    runPnpm(['--filter', '@cost-watchdog/web', 'test:e2e'], { cwd: repoRoot, env });
+    runPnpm(['--filter', '@cost-watchdog/web', 'test:e2e'], { cwd: repoRoot, env: webEnv });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error(error.message || error);

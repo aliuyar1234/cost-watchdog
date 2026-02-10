@@ -66,7 +66,7 @@ function getUserAgent(request: FastifyRequest): string | null {
 
 async function requestContextPlugin(fastify: FastifyInstance): Promise<void> {
   // Decorate request with context
-  fastify.decorateRequest('requestContext', null);
+  fastify.decorateRequest('requestContext', null, []);
 
   // Add hook to populate context on each request
   fastify.addHook('onRequest', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -88,7 +88,7 @@ async function requestContextPlugin(fastify: FastifyInstance): Promise<void> {
 
 export default fp(requestContextPlugin, {
   name: 'request-context',
-  fastify: '4.x',
+  fastify: '5.x',
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

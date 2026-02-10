@@ -17,6 +17,14 @@ export interface RateLimitConfig {
 
 const IS_PRODUCTION = process.env['NODE_ENV'] === 'production';
 
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 /**
  * Rate limit result.
  */
@@ -31,7 +39,11 @@ export interface RateLimitResult {
  * Default rate limits by endpoint type.
  */
 export const RATE_LIMITS = {
-  default: { windowSeconds: 60, maxRequests: 100, keyPrefix: 'rate_limit:default' },
+  default: {
+    windowSeconds: parsePositiveInt(process.env['RATE_LIMIT_DEFAULT_WINDOW_SECONDS'], 60),
+    maxRequests: parsePositiveInt(process.env['RATE_LIMIT_DEFAULT_MAX_REQUESTS'], 100),
+    keyPrefix: 'rate_limit:default',
+  },
   auth: { windowSeconds: 60, maxRequests: 10, keyPrefix: 'rate_limit:auth' },
   upload: { windowSeconds: 60, maxRequests: 20, keyPrefix: 'rate_limit:upload' },
   export: { windowSeconds: 60, maxRequests: 10, keyPrefix: 'rate_limit:export' },
