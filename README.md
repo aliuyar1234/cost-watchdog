@@ -10,9 +10,15 @@ It ingests cost data, runs automated anomaly checks, and delivers notifications 
 
 > Status: preview (`v0.1.0`). APIs, UX, and data model are still evolving.
 
-## Screenshot
+## Showcase
 
-![Dashboard](docs/dashboard.png)
+![Login](docs/showcase/01-login.png)
+![Dashboard](docs/showcase/02-dashboard.png)
+![Anomalies](docs/showcase/03-anomalies.png)
+![Documents](docs/showcase/04-documents.png)
+![Admin users](docs/showcase/05-admin-users.png)
+![Admin settings](docs/showcase/06-admin-settings.png)
+![Notifications](docs/showcase/07-notifications.png)
 
 ## What you get
 
