@@ -195,14 +195,16 @@ export class AnomalyEngine {
    * Calculate number of months of historical data
    */
   private calculateHistoricalMonths(records: HistoricalCostRecord[]): number {
-    if (records.length === 0) return 0;
+    if (records.length === 0) {
+      return 0;
+    }
 
-    const dates = records.map((r) => r.periodStart.getTime());
-    const minDate = Math.min(...dates);
-    const maxDate = Math.max(...dates);
-
-    const months = (maxDate - minDate) / (30 * 24 * 60 * 60 * 1000);
-    return Math.floor(months);
+    const distinctMonths = new Set(
+      records.map(
+        (record) => `${record.periodStart.getUTCFullYear()}-${record.periodStart.getUTCMonth()}`,
+      ),
+    );
+    return distinctMonths.size;
   }
 
   /**
