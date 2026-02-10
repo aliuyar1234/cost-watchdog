@@ -43,5 +43,64 @@ module.exports = {
         ],
       },
     },
+    {
+      files: ['apps/web/**/*.{ts,tsx,js,jsx}'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              {
+                group: [
+                  '@cost-watchdog/api',
+                  '@cost-watchdog/api/*',
+                  'apps/api/*',
+                  '**/apps/api/**',
+                  '../api/**',
+                  '../../api/**',
+                  '../../../api/**',
+                  '../../../../api/**',
+                ],
+                message: 'Web app must not import API app modules.',
+              },
+              {
+                group: [
+                  '@cost-watchdog/connectors',
+                  '@cost-watchdog/connectors/*',
+                  '@cost-watchdog/connector-sdk',
+                  '@cost-watchdog/connector-sdk/*',
+                ],
+                message: 'Web app must not import server-only connector packages.',
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      files: ['apps/api/**/*.{ts,tsx,js,jsx}'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              {
+                group: [
+                  '@cost-watchdog/web',
+                  '@cost-watchdog/web/*',
+                  'apps/web/*',
+                  '**/apps/web/**',
+                  '../web/**',
+                  '../../web/**',
+                  '../../../web/**',
+                  '../../../../web/**',
+                ],
+                message: 'API app must not import Web app modules.',
+              },
+            ],
+          },
+        ],
+      },
+    },
   ],
 };

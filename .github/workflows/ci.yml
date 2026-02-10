@@ -208,10 +208,41 @@ jobs:
           fail_ci_if_error: false
         continue-on-error: true
 
+  web-e2e:
+    name: Web E2E
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @cost-watchdog/api exec prisma generate
+
+      - name: Install Playwright browser
+        run: pnpm --filter @cost-watchdog/web exec playwright install --with-deps chromium
+
+      - name: Run web E2E tests
+        run: pnpm test:e2e
+
   docker:
     name: Docker Build & Scan
     runs-on: ubuntu-latest
-    needs: [build, test]
+    needs: [build, test, web-e2e]
     # Only run on main branch pushes, not PRs
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:

@@ -83,6 +83,61 @@ services:
         max-file: '3'
 
   # ===========================================================================
+  # One-off Prisma migration step (run explicitly before deployment)
+  # ===========================================================================
+  migrate:
+    image: cost-watchdog-api:${VERSION:?VERSION is required - do not use latest}
+    container_name: cost-watchdog-migrate
+    profiles: ['ops']
+    restart: 'no'
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ['node', '-e']
+    command:
+      - |
+        const fs = require('fs');
+        const { execFileSync } = require('child_process');
+
+        const secretPath = '/run/secrets/db_url';
+        const databaseUrl = fs.existsSync(secretPath)
+          ? fs.readFileSync(secretPath, 'utf8').trim()
+          : process.env.DATABASE_URL;
+        if (!databaseUrl) {
+          throw new Error('DATABASE_URL not found in /run/secrets/db_url.');
+        }
+
+        const prismaBins = [
+          '/app/apps/api/node_modules/.bin/prisma',
+          '/app/node_modules/.bin/prisma',
+        ];
+        const prismaBin = prismaBins.find((path) => fs.existsSync(path));
+        if (!prismaBin) {
+          throw new Error('Prisma CLI not found in image.');
+        }
+
+        execFileSync(
+          prismaBin,
+          ['migrate', 'deploy', '--schema', '/app/apps/api/prisma/schema.prisma'],
+          {
+            stdio: 'inherit',
+            env: {
+              ...process.env,
+              DATABASE_URL: databaseUrl,
+            },
+          },
+        );
+    volumes:
+      - ./secrets/db_url:/run/secrets/db_url:ro
+    networks:
+      - app-network
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # ===========================================================================
   # API Service
   # ===========================================================================
   api:
@@ -286,7 +341,11 @@ volumes:
 #    docker build -t cost-watchdog-api:v1.0.0 -f apps/api/Dockerfile .
 #    docker build -t cost-watchdog-web:v1.0.0 --build-arg NEXT_PUBLIC_API_URL=https://api.$DOMAIN/api/v1 -f apps/web/Dockerfile .
 #
-# 3. Run (replace with your domain and email):
+# 3. Run database migrations (explicit one-off step):
+#    VERSION=v1.0.0 \
+#    docker compose -f infrastructure/docker-compose.prod.yml --profile ops run --rm migrate
+#
+# 4. Run (replace with your domain and email):
 #    VERSION=v1.0.0 \
 #    DOMAIN=costwatchdog.com \
 #    ACME_EMAIL=admin@costwatchdog.com \
@@ -294,9 +353,9 @@ volumes:
 #    S3_BUCKET=cost-watchdog \
 #    docker-compose -f infrastructure/docker-compose.prod.yml up -d
 #
-# 4. Verify TLS:
+# 5. Verify TLS:
 #    curl -I https://costwatchdog.com
 #
-# 5. For Docker Swarm with higher availability:
+# 6. For Docker Swarm with higher availability:
 #    Use docker-compose.swarm.yml instead
 # =============================================================================
