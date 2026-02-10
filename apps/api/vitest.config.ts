@@ -19,10 +19,10 @@ export default defineConfig({
       // Enterprise-grade coverage thresholds
       thresholds: {
         // Overall thresholds
-        lines: 60,
-        functions: 60,
-        branches: 50,
-        statements: 60,
+        lines: 70,
+        functions: 70,
+        branches: 70,
+        statements: 70,
         // Critical paths require higher coverage
         perFile: false, // Set to true later for stricter enforcement
       },
