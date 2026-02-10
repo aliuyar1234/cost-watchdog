@@ -11,7 +11,11 @@ import {
   type SupplierDetectionResult,
 } from './supplier-detector.js';
 import { getTemplate, extractGenericUtility } from './templates/index.js';
-import { extractWithLLM, type LLMExtractionConfig } from './llm-extractor.js';
+import {
+  extractWithLLM,
+  type LLMExtractionAudit,
+  type LLMExtractionConfig,
+} from './llm-extractor.js';
 
 /**
  * PDF extraction configuration.
@@ -72,7 +76,7 @@ export async function extractFromPdf(
   let records: Partial<ExtractedCostRecord>[] = [];
   let extractionMethod: 'template' | 'llm' | 'manual' = 'manual';
   let confidence = 0;
-  let llmAudit: Record<string, unknown> | undefined;
+  let llmAudit: LLMExtractionAudit | undefined;
 
   // Step 3: Try template extraction if supplier detected
   if (supplierResult.detected && supplierResult.supplier?.templateId && !config.forceLlm) {
@@ -192,10 +196,10 @@ export async function extractFromPdf(
       connectorVersion: '0.1.0',
       inputHash,
       ...(llmAudit && {
-        llmModel: llmAudit['model'] as string,
-        llmPromptVersion: llmAudit['promptVersion'] as string,
-        llmTemperature: llmAudit['temperature'] as number,
-        llmResponseHash: llmAudit['outputHash'] as string,
+        llmModel: llmAudit.model,
+        llmPromptVersion: llmAudit.promptVersion,
+        llmTemperature: llmAudit.temperature,
+        llmResponseHash: llmAudit.outputHash,
       }),
     },
     error: finalRecords.length === 0 ? 'No valid records extracted' : undefined,
