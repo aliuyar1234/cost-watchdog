@@ -105,6 +105,7 @@ async function main() {
     await waitForHealthy('cost-watchdog-postgres-test');
     await waitForHealthy('cost-watchdog-redis-test');
 
+    runPnpm(['--filter', '@cost-watchdog/api...', 'build'], { cwd: repoRoot, env });
     runPnpm(['--filter', '@cost-watchdog/api', 'db:push'], { cwd: repoRoot, env });
     runPnpm(['--filter', '@cost-watchdog/api', 'test'], { cwd: repoRoot, env });
   } catch (error) {

@@ -157,6 +157,7 @@ async function main() {
     await waitForHealthy('cost-watchdog-redis-e2e');
     await waitForHealthy('cost-watchdog-minio-e2e');
 
+    runPnpm(['--filter', '@cost-watchdog/api...', 'build'], { cwd: repoRoot, env });
     runPnpm(['--filter', '@cost-watchdog/api', 'db:push'], { cwd: repoRoot, env });
     runPnpm(['--filter', '@cost-watchdog/api', 'exec', 'tsx', 'scripts/seed-e2e.ts'], {
       cwd: repoRoot,
