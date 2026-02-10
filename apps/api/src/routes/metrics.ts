@@ -2,18 +2,17 @@
  * Prometheus Metrics Route
  *
  * Exposes /metrics endpoint for Prometheus scraping.
- * This endpoint is unauthenticated for scraper access but should be
- * protected at the network level (internal network only).
+ * In production, this endpoint requires METRICS_TOKEN (or Docker secret
+ * metrics_token) and fails closed if token is missing.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getMetrics, getMetricsContentType } from '../lib/metrics.js';
 import { timingSafeEqual } from 'crypto';
-
-const METRICS_TOKEN = process.env['METRICS_TOKEN'];
+import { readSecret } from '../lib/secrets.js';
 
 function getBearerToken(authorizationHeader: string): string | null {
-  const match = authorizationHeader.match(/^Bearer\\s+(.+)$/i);
+  const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim() || null;
 }
 
@@ -25,14 +24,21 @@ function safeTokenEquals(a: string, b: string): boolean {
 }
 
 export default async function metricsRoutes(fastify: FastifyInstance): Promise<void> {
+  const isProduction = process.env['NODE_ENV'] === 'production';
+  const metricsToken = readSecret('metrics_token', 'METRICS_TOKEN');
+
+  if (isProduction && !metricsToken) {
+    fastify.log.error(
+      'METRICS_TOKEN (or /run/secrets/metrics_token) missing in production; /metrics is disabled',
+    );
+  }
+
   /**
    * GET /metrics
    * Prometheus metrics endpoint.
    *
-   * NOTE: This endpoint is intentionally unauthenticated for Prometheus access.
-   * It should be protected at the infrastructure level:
-   * - Only accessible from internal network
-   * - Not exposed through public load balancer
+   * - Production: requires bearer token and fails closed if token is missing.
+   * - Non-production: unauthenticated by default unless METRICS_TOKEN is configured.
    */
   fastify.get(
     '/',
@@ -45,6 +51,9 @@ export default async function metricsRoutes(fastify: FastifyInstance): Promise<v
           401: {
             type: 'string',
           },
+          503: {
+            type: 'string',
+          },
         },
         tags: ['Monitoring'],
         summary: 'Prometheus metrics',
@@ -53,11 +62,15 @@ export default async function metricsRoutes(fastify: FastifyInstance): Promise<v
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        if (METRICS_TOKEN) {
+        if (isProduction && !metricsToken) {
+          return reply.code(503).send('Metrics endpoint is disabled');
+        }
+
+        if (metricsToken) {
           const authorizationHeader = request.headers['authorization'];
           const token =
             typeof authorizationHeader === 'string' ? getBearerToken(authorizationHeader) : null;
-          if (!token || !safeTokenEquals(token, METRICS_TOKEN)) {
+          if (!token || !safeTokenEquals(token, metricsToken)) {
             return reply.code(401).send('Unauthorized');
           }
         }

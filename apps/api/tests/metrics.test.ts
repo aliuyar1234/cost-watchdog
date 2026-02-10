@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Fastify from 'fastify';
 import metricsRoutes from '../src/routes/metrics.js';
 import {
@@ -106,6 +106,22 @@ describe('Metrics Service', () => {
 
 describe('Metrics Routes', () => {
   let app: ReturnType<typeof Fastify>;
+  const originalNodeEnv = process.env['NODE_ENV'];
+  const originalMetricsToken = process.env['METRICS_TOKEN'];
+
+  afterEach(() => {
+    if (originalNodeEnv === undefined) {
+      delete process.env['NODE_ENV'];
+    } else {
+      process.env['NODE_ENV'] = originalNodeEnv;
+    }
+
+    if (originalMetricsToken === undefined) {
+      delete process.env['METRICS_TOKEN'];
+    } else {
+      process.env['METRICS_TOKEN'] = originalMetricsToken;
+    }
+  });
 
   beforeEach(async () => {
     app = Fastify();
@@ -161,5 +177,62 @@ describe('Metrics Routes', () => {
       expect(response.body).toContain('failed_login_attempts_total');
       expect(response.body).toContain('account_lockouts_total');
     });
+  });
+});
+
+describe('Metrics Routes Security', () => {
+  const originalNodeEnv = process.env['NODE_ENV'];
+  const originalMetricsToken = process.env['METRICS_TOKEN'];
+
+  afterEach(() => {
+    if (originalNodeEnv === undefined) {
+      delete process.env['NODE_ENV'];
+    } else {
+      process.env['NODE_ENV'] = originalNodeEnv;
+    }
+
+    if (originalMetricsToken === undefined) {
+      delete process.env['METRICS_TOKEN'];
+    } else {
+      process.env['METRICS_TOKEN'] = originalMetricsToken;
+    }
+  });
+
+  it('fails closed in production when no metrics token is configured', async () => {
+    process.env['NODE_ENV'] = 'production';
+    delete process.env['METRICS_TOKEN'];
+
+    const app = Fastify();
+    await app.register(metricsRoutes);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/',
+    });
+
+    expect(response.statusCode).toBe(503);
+  });
+
+  it('requires a bearer token when METRICS_TOKEN is configured', async () => {
+    process.env['NODE_ENV'] = 'production';
+    process.env['METRICS_TOKEN'] = 'test-metrics-token';
+
+    const app = Fastify();
+    await app.register(metricsRoutes);
+
+    const unauthorized = await app.inject({
+      method: 'GET',
+      url: '/',
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    const authorized = await app.inject({
+      method: 'GET',
+      url: '/',
+      headers: {
+        authorization: 'Bearer test-metrics-token',
+      },
+    });
+    expect(authorized.statusCode).toBe(200);
   });
 });

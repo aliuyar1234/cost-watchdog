@@ -264,7 +264,7 @@ fastify.get(
   },
 );
 
-// Prometheus metrics endpoint (unauthenticated, protect at network level)
+// Prometheus metrics endpoint (token-gated in production)
 await fastify.register(metricsRoutes, { prefix: '/metrics' });
 
 // API version prefix
@@ -319,7 +319,7 @@ fastify.register(
     // Notification settings (current user)
     await app.register(notificationSettingsRoutes, { prefix: '/notification-settings' });
 
-    // Register OpenAPI documentation routes
+    // Register OpenAPI documentation routes (disabled by default in production)
     await registerOpenApi(app);
   },
   { prefix: '/api/v1' },

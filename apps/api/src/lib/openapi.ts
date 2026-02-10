@@ -3,10 +3,32 @@ import { openApiSpec } from './openapi-spec.js';
 
 export { openApiSpec } from './openapi-spec.js';
 
+function parseBooleanEnv(value: string | undefined, defaultValue: boolean): boolean {
+  if (value === undefined) return defaultValue;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on')
+    return true;
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off')
+    return false;
+
+  return defaultValue;
+}
+
+function isOpenApiDocsEnabled(): boolean {
+  const isProduction = process.env['NODE_ENV'] === 'production';
+  return parseBooleanEnv(process.env['OPENAPI_DOCS_ENABLED'], !isProduction);
+}
+
 /**
  * Register OpenAPI routes on Fastify instance
  */
 export async function registerOpenApi(fastify: FastifyInstance): Promise<void> {
+  if (!isOpenApiDocsEnabled()) {
+    fastify.log.info('OpenAPI docs/routes disabled (OPENAPI_DOCS_ENABLED=false)');
+    return;
+  }
+
   // Serve OpenAPI spec as JSON
   fastify.get('/openapi.json', async (request, reply) => {
     return reply.send(openApiSpec);
