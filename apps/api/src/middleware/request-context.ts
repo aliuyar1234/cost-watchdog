@@ -12,6 +12,7 @@
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import { randomUUID } from 'crypto';
+import { extractOrGenerateRequestId } from '../lib/request-id.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -47,12 +48,7 @@ function getClientIp(request: FastifyRequest): string {
  * Propagates existing X-Request-ID for distributed tracing.
  */
 function getRequestId(request: FastifyRequest): string {
-  const existingId = request.headers['x-request-id'];
-  if (existingId) {
-    const id = Array.isArray(existingId) ? existingId[0] : existingId;
-    if (id) return id;
-  }
-  return randomUUID();
+  return extractOrGenerateRequestId(request.headers);
 }
 
 /**

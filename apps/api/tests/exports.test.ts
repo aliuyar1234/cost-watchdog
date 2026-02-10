@@ -125,6 +125,27 @@ describe('Export Routes', () => {
       expect(csv).toContain('HQ Berlin');
     });
 
+    it('sanitizes CSV formula values in exported cost records', async () => {
+      const { costRecord } = await createTestData();
+      await prisma.costRecord.update({
+        where: { id: costRecord.id },
+        data: {
+          invoiceNumber: '=2+2',
+        },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/exports/cost-records?format=csv',
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const csv = response.body;
+      expect(csv).toContain(`"'=2+2"`);
+      expect(csv).not.toContain(`"=2+2"`);
+    });
+
     it('exports cost records as JSON', async () => {
       await createTestData();
 
@@ -212,6 +233,27 @@ describe('Export Routes', () => {
       expect(csv).toContain('ID');
       expect(csv).toContain('Schweregrad');
       expect(csv).toContain('warning');
+    });
+
+    it('sanitizes CSV formula values in exported anomalies', async () => {
+      const { anomaly } = await createTestData();
+      await prisma.anomaly.update({
+        where: { id: anomaly.id },
+        data: {
+          message: '+malicious',
+        },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/exports/anomalies?format=csv',
+        headers: { authorization: `Bearer ${adminToken}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const csv = response.body;
+      expect(csv).toContain(`"'+malicious"`);
+      expect(csv).not.toContain(`"+malicious"`);
     });
 
     it('exports anomalies as JSON', async () => {

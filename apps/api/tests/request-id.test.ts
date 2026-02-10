@@ -144,6 +144,22 @@ describe('Request ID Tracking', () => {
       expect(body.requestId).toBe(incomingId);
     });
 
+    it('should replace invalid incoming X-Request-ID', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/test',
+        headers: {
+          [REQUEST_ID_HEADER]: 'invalid-id!',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const responseId = response.headers['x-request-id'] as string;
+      expect(responseId).toBeDefined();
+      expect(responseId).not.toBe('invalid-id!');
+      expect(isValidRequestId(responseId)).toBe(true);
+    });
+
     it('should populate request context with Fastify-derived IP address', async () => {
       const response = await app.inject({
         method: 'GET',

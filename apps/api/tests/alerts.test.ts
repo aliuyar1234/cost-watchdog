@@ -189,6 +189,15 @@ describe('Alert Routes', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    it('does not bypass auth when query contains track-click text', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/alerts?next=/track-click',
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
   });
 
   describe('GET /alerts/stats', () => {
