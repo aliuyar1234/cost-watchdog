@@ -238,7 +238,7 @@ interface CostRecord {
   // Qualität
   confidence: number; // 0-1, wie sicher ist die Extraktion
   manuallyVerified: boolean;
-  extractionMethod: 'template' | 'llm' | 'manual' | 'api';
+  extractionMethod: 'llm' | 'manual' | 'api';
 }
 
 type CostType =
@@ -364,8 +364,7 @@ type ConsumptionUnit = 'kWh' | 'MWh' | 'm³' | 'liter' | 'kg' | 'tonne' | 'piece
 │  │                                                                       │   │
 │  │  ExtractionAudit {                                                   │   │
 │  │    documentId: "doc_xyz",                                            │   │
-│  │    extractionMethod: "llm",  // oder "template"                      │   │
-│  │    templateId?: "wien_energie_v2",                                   │   │
+│  │    extractionMethod: "llm",                                            │   │
 │  │    llmModel?: "claude-3-5-sonnet",                                   │   │
 │  │    llmPromptVersion?: "cost_extraction_v1.3",                        │   │
 │  │    llmTemperature?: 0.0,                                             │   │
@@ -390,54 +389,21 @@ type ConsumptionUnit = 'kWh' | 'MWh' | 'm³' | 'liter' | 'kg' | 'tonne' | 'piece
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.5 Template-Parser für Top-Lieferanten (V1)
+### 3.5 LLM-Only PDF Extraktion (V1)
 
 ```typescript
-// packages/connectors/pdf/src/templates/index.ts
+// packages/connectors/src/pdf/extract.ts
 
-/**
- * Template-Registry für bekannte Lieferanten.
- * Deckt ~80% der DACH-Energierechnungen ab.
- */
-export const supplierTemplates: SupplierTemplate[] = [
-  // Strom - Österreich
-  { id: 'wien_energie', patterns: ['Wien Energie', 'ATU16346809'], parser: wienEnergieParser },
-  { id: 'evn', patterns: ['EVN Energievertrieb', 'ATU15766402'], parser: evnParser },
-  { id: 'verbund', patterns: ['VERBUND', 'ATU14703908'], parser: verbundParser },
-  {
-    id: 'energie_steiermark',
-    patterns: ['Energie Steiermark', 'ATU37009307'],
-    parser: energieSteiermarkParser,
-  },
-  { id: 'kelag', patterns: ['KELAG', 'ATU26aboratory404'], parser: kelagParser },
+const config: PdfExtractionConfig = {
+  anthropicApiKey: secrets.getAnthropicApiKey(),
+  minConfidence: 0.75,
+};
 
-  // Strom - Deutschland
-  { id: 'eon', patterns: ['E.ON Energie', 'DE811182998'], parser: eonParser },
-  { id: 'enbw', patterns: ['EnBW', 'DE812276032'], parser: enbwParser },
-  { id: 'rwe', patterns: ['RWE', 'DE811184594'], parser: rweParser },
-  { id: 'vattenfall', patterns: ['Vattenfall', 'DE118702827'], parser: vattenfallParser },
-  { id: 'stadtwerke_muenchen', patterns: ['Stadtwerke München', 'DE129521671'], parser: swmParser },
-
-  // Gas/Fernwärme
-  { id: 'wien_energie_gas', patterns: ['Wien Energie', 'Erdgas'], parser: wienEnergieGasParser },
-  { id: 'tigas', patterns: ['TIGAS', 'ATU36782606'], parser: tigasParser },
-
-  // Telekom - Österreich
-  { id: 'a1', patterns: ['A1 Telekom', 'ATU62895905'], parser: a1Parser },
-  { id: 'magenta', patterns: ['Magenta Telekom', 'ATU62159929'], parser: magentaParser },
-  { id: 'drei', patterns: ['Drei Austria', 'ATU61347377'], parser: dreiParser },
-
-  // Telekom - Deutschland
-  { id: 'telekom', patterns: ['Deutsche Telekom', 'DE123475223'], parser: telekomParser },
-  { id: 'vodafone', patterns: ['Vodafone', 'DE812381591'], parser: vodafoneParser },
-  { id: 'o2', patterns: ['Telefónica Germany', 'DE813127040'], parser: o2Parser },
-];
-
-interface SupplierTemplate {
-  id: string;
-  patterns: string[]; // Erkennungsmuster (Text oder UID)
-  parser: (text: string, layout: PDFLayout) => CostRecord;
-}
+const result = await extractFromPdf(input, config);
+// Ergebnis wird nur akzeptiert, wenn confidence >= minConfidence
+// und keine kritischen Warnungen vorliegen.
 ```
+
+PDF-Verarbeitung ist LLM-only.
 
 ---

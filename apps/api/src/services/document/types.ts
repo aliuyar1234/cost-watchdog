@@ -1,4 +1,4 @@
-import { ALLOWED_FILE_TYPES } from '../../lib/file-validation.js';
+import { SUPPORTED_UPLOAD_MIME_TYPES } from '../../lib/ingest-policy.js';
 
 export interface ServiceContext {
   requestId: string;
@@ -46,5 +46,5 @@ export type DownloadResult =
 export type DeleteResult = ServiceResult<void> | ServiceError;
 export type RetryResult = ServiceResult<{ message: string }> | ServiceError;
 
-export const ALLOWED_MIME_TYPES = Object.keys(ALLOWED_FILE_TYPES);
+export const ALLOWED_MIME_TYPES = [...SUPPORTED_UPLOAD_MIME_TYPES];
 export const MAX_FILE_SIZE = 10 * 1024 * 1024;

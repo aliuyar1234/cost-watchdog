@@ -5,6 +5,7 @@ import multipart from '@fastify/multipart';
 import documentRoutes from '../src/routes/documents.js';
 import authPlugin from '../src/middleware/auth.js';
 import { generateTokenPair } from '../src/lib/auth.js';
+import { ALLOWED_MIME_TYPES } from '../src/services/document/types.js';
 import { prisma } from './setup';
 
 // Mock S3 operations
@@ -658,22 +659,21 @@ describe('Document Routes', () => {
 
 describe('Document Upload Validation', () => {
   it('rejects invalid MIME types', async () => {
-    // This tests the ALLOWED_MIME_TYPES validation logic
-    const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'text/csv',
-      'image/png',
-      'image/jpeg',
-    ];
+    // Validate configured upload policy from the service contract.
+    const allowedTypes = [...ALLOWED_MIME_TYPES];
 
     const invalidTypes = [
       'application/javascript',
       'text/html',
       'application/x-executable',
       'application/octet-stream',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'image/png',
+      'image/jpeg',
     ];
+
+    expect(allowedTypes).toEqual(['text/csv', 'application/pdf']);
 
     // Verify the validation logic
     invalidTypes.forEach((type) => {

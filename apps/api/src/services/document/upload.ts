@@ -1,6 +1,11 @@
 import { prisma } from '../../lib/db.js';
 import { uploadFile, generateStoragePath, calculateFileHash } from '../../lib/s3.js';
 import { validateFile } from '../../lib/file-validation.js';
+import {
+  canProcessPdfWithLlm,
+  isPdfMimeType,
+  PDF_LLM_KEY_MISSING_UPLOAD_REASON,
+} from '../../lib/ingest-policy.js';
 import { createServiceError, logDocumentAudit, withContext } from './helpers.js';
 import {
   ALLOWED_MIME_TYPES,
@@ -19,12 +24,16 @@ export async function uploadDocument(
 ): Promise<UploadResult> {
   const { buffer, filename, mimetype } = input;
 
-  if (!ALLOWED_MIME_TYPES.includes(mimetype)) {
+  if (!ALLOWED_MIME_TYPES.some((allowedType) => allowedType === mimetype)) {
     return createServiceError(
       'Bad Request',
-      `Invalid file type. Allowed types: ${ALLOWED_MIME_TYPES.join(', ')}`,
+      `Invalid file type. Supported ingest types: ${ALLOWED_MIME_TYPES.join(', ')}`,
       400,
     );
+  }
+
+  if (isPdfMimeType(mimetype) && !canProcessPdfWithLlm()) {
+    return createServiceError('Unprocessable Entity', PDF_LLM_KEY_MISSING_UPLOAD_REASON, 422);
   }
 
   if (buffer.length > MAX_FILE_SIZE) {

@@ -12,7 +12,6 @@ export interface SupplierPattern {
   namePatterns?: RegExp[];
   keywords?: string[];
   costTypes: string[];
-  templateId?: string;
 }
 
 /**
@@ -28,7 +27,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/E\.?ON/i, /EON\s*Energie/i],
     keywords: ['E.ON', 'Energie Deutschland'],
     costTypes: ['electricity', 'natural_gas'],
-    templateId: 'eon_standard',
   },
   {
     id: 'vattenfall',
@@ -37,7 +35,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/Vattenfall/i],
     keywords: ['Vattenfall', 'Europe Sales'],
     costTypes: ['electricity', 'natural_gas', 'district_heating'],
-    templateId: 'vattenfall_standard',
   },
   {
     id: 'rwe',
@@ -46,7 +43,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/RWE/i, /innogy/i],
     keywords: ['RWE', 'innogy'],
     costTypes: ['electricity', 'natural_gas'],
-    templateId: 'rwe_standard',
   },
   {
     id: 'engie',
@@ -55,7 +51,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/ENGIE/i, /GDF\s*SUEZ/i],
     keywords: ['ENGIE', 'GDF SUEZ'],
     costTypes: ['electricity', 'natural_gas'],
-    templateId: 'engie_standard',
   },
   // Telecom
   {
@@ -65,7 +60,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/Deutsche\s*Telekom/i, /T-Mobile/i, /Telekom\s*Deutschland/i],
     keywords: ['Telekom', 'T-Mobile', 'MagentaEINS'],
     costTypes: ['telecom_mobile', 'telecom_landline', 'telecom_internet'],
-    templateId: 'telekom_standard',
   },
   {
     id: 'vodafone',
@@ -74,7 +68,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/Vodafone/i, /Kabel\s*Deutschland/i],
     keywords: ['Vodafone', 'Kabel Deutschland'],
     costTypes: ['telecom_mobile', 'telecom_landline', 'telecom_internet'],
-    templateId: 'vodafone_standard',
   },
   // Austrian Suppliers
   {
@@ -84,7 +77,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/VERBUND/i],
     keywords: ['VERBUND', 'Österreichische Elektrizitätswirtschafts'],
     costTypes: ['electricity'],
-    templateId: 'verbund_standard',
   },
   {
     id: 'wien_energie',
@@ -93,7 +85,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/Wien\s*Energie/i],
     keywords: ['Wien Energie', 'Wiener Stadtwerke'],
     costTypes: ['electricity', 'natural_gas', 'district_heating'],
-    templateId: 'wien_energie_standard',
   },
   // Swiss Suppliers
   {
@@ -103,7 +94,6 @@ export const knownSuppliers: SupplierPattern[] = [
     namePatterns: [/Swisscom/i],
     keywords: ['Swisscom'],
     costTypes: ['telecom_mobile', 'telecom_landline', 'telecom_internet'],
-    templateId: 'swisscom_standard',
   },
 ];
 
