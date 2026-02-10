@@ -1,12 +1,65 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, type FileRejection } from 'react-dropzone';
 import { documentsApi, ApiError } from '../../lib/api';
 import type { DocumentsPaginationState, DocumentsQuery, ManagedDocument } from './types';
 
 const PAGE_LIMIT = 25;
 const MAX_CONCURRENT_UPLOADS = 3;
+const MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024;
+
+const CSV_EXPORT_GUIDE = [
+  'XLS/XLSX wird nicht direkt verarbeitet.',
+  'So exportierst du korrekt nach CSV:',
+  '1. Datei in Excel oder Google Sheets oeffnen',
+  '2. Datei > Speichern unter / Herunterladen',
+  '3. Format: CSV UTF-8 (.csv)',
+  '4. CSV erneut hochladen',
+].join('\n');
+
+function isLegacySpreadsheet(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return (
+    lowerName.endsWith('.xlsx') ||
+    lowerName.endsWith('.xls') ||
+    file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    file.type === 'application/vnd.ms-excel'
+  );
+}
+
+function formatDropzoneRejection(rejections: FileRejection[]): string {
+  const first = rejections[0];
+  if (!first) {
+    return 'Upload fehlgeschlagen. Bitte versuchen Sie es erneut.';
+  }
+
+  const hasTypeError = first.errors.some((error) => error.code === 'file-invalid-type');
+  const hasSizeError = first.errors.some((error) => error.code === 'file-too-large');
+
+  if (hasSizeError) {
+    return `"${first.file.name}" ist zu gross. Maximal erlaubt sind ${Math.floor(MAX_UPLOAD_SIZE_BYTES / 1024 / 1024)}MB.`;
+  }
+
+  if (hasTypeError && isLegacySpreadsheet(first.file)) {
+    return CSV_EXPORT_GUIDE;
+  }
+
+  if (hasTypeError) {
+    return 'Dateityp nicht unterstützt. Erlaubt sind CSV (primär) und PDF via LLM.';
+  }
+
+  const fallback = first.errors[0]?.message;
+  return fallback || 'Upload fehlgeschlagen. Bitte versuchen Sie es erneut.';
+}
+
+function normalizeUploadApiErrorMessage(message: string): string {
+  if (message.includes('Supported ingest types')) {
+    return `${message}\n\n${CSV_EXPORT_GUIDE}`;
+  }
+
+  return message;
+}
 
 interface UseDocumentsResult {
   documents: ManagedDocument[];
@@ -116,7 +169,7 @@ export function useDocuments(): UseDocumentsResult {
         await fetchDocuments();
       } catch (dropError) {
         if (dropError instanceof ApiError) {
-          setUploadError(dropError.message);
+          setUploadError(normalizeUploadApiErrorMessage(dropError.message));
         } else {
           setUploadError('Upload fehlgeschlagen. Bitte versuchen Sie es erneut.');
         }
@@ -127,15 +180,19 @@ export function useDocuments(): UseDocumentsResult {
     [fetchDocuments, uploadFilesConcurrently],
   );
 
+  const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
+    setUploadSuccess('');
+    setUploadError(formatDropzoneRejection(fileRejections));
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: {
       'application/pdf': ['.pdf'],
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'application/vnd.ms-excel': ['.xls'],
       'text/csv': ['.csv'],
     },
-    maxSize: 10 * 1024 * 1024,
+    maxSize: MAX_UPLOAD_SIZE_BYTES,
   });
 
   const handleDownload = async (doc: ManagedDocument) => {

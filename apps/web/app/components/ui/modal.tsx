@@ -91,24 +91,28 @@ export function Modal({ title, onClose, children }: ModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-lg outline-none"
+        className="bg-white/92 relative w-full max-w-md rounded-2xl border border-white/70 p-6 shadow-soft outline-none"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 id={titleId} className="text-xl font-bold text-gray-900">
+          <h2 id={titleId} className="font-display text-xl font-semibold text-slate-900">
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
+            className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
             aria-label="Close dialog"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

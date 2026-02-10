@@ -17,12 +17,12 @@ export function CriticalAnomaliesPanel({ anomalies }: CriticalAnomaliesPanelProp
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+            <span className="h-2 w-2 animate-pulse rounded-full bg-rose-500" />
             Kritische Anomalien
           </CardTitle>
           <Link
             href="/anomalies?severity=critical"
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-900 hover:underline"
           >
             Alle anzeigen
           </Link>
@@ -34,7 +34,7 @@ export function CriticalAnomaliesPanel({ anomalies }: CriticalAnomaliesPanelProp
             <Link
               key={anomaly.id}
               href={`/anomalies/${anomaly.id}`}
-              className="block rounded-lg border border-red-200 bg-red-50 p-3 transition-colors hover:bg-red-100"
+              className="block rounded-xl border border-rose-200 bg-rose-50/80 p-3 transition hover:bg-rose-100/80"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">

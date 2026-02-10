@@ -20,19 +20,23 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
+      'inline-flex items-center justify-center rounded-xl border border-transparent text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50';
 
     const variants = {
-      default: 'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500',
-      outline: 'border border-gray-300 bg-white hover:bg-gray-50 focus-visible:ring-gray-500',
-      ghost: 'hover:bg-gray-100 focus-visible:ring-gray-500',
-      destructive: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
+      default:
+        'bg-slate-900 text-white shadow-soft hover:bg-slate-800 focus-visible:ring-slate-900',
+      outline:
+        'border-slate-200 bg-white/85 text-slate-700 shadow-sm backdrop-blur hover:bg-white focus-visible:ring-slate-600',
+      ghost:
+        'text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 focus-visible:ring-slate-500',
+      destructive:
+        'bg-rose-600 text-white shadow-soft hover:bg-rose-700 focus-visible:ring-rose-600',
     };
 
     const sizes = {
-      default: 'h-10 px-4 py-2',
-      sm: 'h-8 px-3 text-sm',
-      lg: 'h-12 px-6 text-lg',
+      default: 'h-10 px-4',
+      sm: 'h-9 px-3 text-xs',
+      lg: 'h-11 px-6 text-base',
       icon: 'h-10 w-10',
     };
 

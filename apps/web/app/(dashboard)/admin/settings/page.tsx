@@ -34,31 +34,31 @@ export default function SettingsPage() {
   if (user?.role !== 'admin') {
     return (
       <div className="p-8">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700">Sie haben keine Berechtigung fuer diese Seite.</p>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-4">
+          <p className="text-rose-700">Sie haben keine Berechtigung fuer diese Seite.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Einstellungen</h1>
-        <p className="mt-1 text-gray-600">
+        <h1 className="page-heading">Einstellungen</h1>
+        <p className="page-subheading">
           Konfigurieren Sie allgemeine Einstellungen, Benachrichtigungen und Schwellenwerte
         </p>
       </div>
 
       {message && (
         <div
-          className={`mb-6 rounded-lg p-4 ${
+          className={`mb-6 rounded-2xl p-4 ${
             message.type === 'success'
-              ? 'border border-green-200 bg-green-50'
-              : 'border border-red-200 bg-red-50'
+              ? 'border border-emerald-200 bg-emerald-50/90'
+              : 'border border-rose-200 bg-rose-50/90'
           }`}
         >
-          <p className={message.type === 'success' ? 'text-green-700' : 'text-red-700'}>
+          <p className={message.type === 'success' ? 'text-emerald-700' : 'text-rose-700'}>
             {message.text}
           </p>
         </div>

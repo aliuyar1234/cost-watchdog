@@ -1,19 +1,19 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '../../lib/auth-context';
+import { useState } from 'react';
 import { Button } from '../../components/ui/button';
-import { Input } from '../../components/ui/input';
 import {
   Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
 } from '../../components/ui/card';
+import { Input } from '../../components/ui/input';
 import { ApiError } from '../../lib/api';
+import { useAuth } from '../../lib/auth-context';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -22,8 +22,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
     setIsLoading(true);
 
@@ -41,16 +41,16 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
+    <div className="relative flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute -left-20 top-0 h-72 w-72 rounded-full bg-slate-900/10 blur-3xl" />
+        <div className="absolute -right-20 bottom-0 h-72 w-72 rounded-full bg-slate-500/15 blur-3xl" />
+      </div>
+
+      <Card className="bg-white/88 w-full max-w-md border-white/80 shadow-soft backdrop-blur-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4">
-            <svg
-              className="mx-auto h-12 w-12 text-blue-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
+          <div className="mx-auto mb-4 rounded-2xl bg-slate-900 p-3 text-white shadow-soft">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -59,13 +59,17 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <CardTitle className="text-2xl">Willkommen zurück</CardTitle>
+          <CardTitle className="text-3xl">Willkommen zurueck</CardTitle>
           <CardDescription>Melden Sie sich bei Cost Watchdog an</CardDescription>
         </CardHeader>
 
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            {error && <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+            {error && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/90 p-3 text-sm text-rose-700">
+                {error}
+              </div>
+            )}
 
             <Input
               label="E-Mail"
@@ -73,7 +77,7 @@ export default function LoginPage() {
               name="email"
               placeholder="name@firma.de"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
               required
               autoComplete="email"
             />
@@ -82,9 +86,9 @@ export default function LoginPage() {
               label="Passwort"
               type="password"
               name="password"
-              placeholder="••••••••"
+              placeholder="Passwort eingeben"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               required
               autoComplete="current-password"
             />
@@ -95,9 +99,9 @@ export default function LoginPage() {
               Anmelden
             </Button>
 
-            <p className="text-center text-sm text-gray-600">
+            <p className="text-center text-sm text-slate-600">
               Noch kein Konto?{' '}
-              <Link href="/register" className="text-blue-600 hover:underline">
+              <Link href="/register" className="font-medium text-slate-900 hover:underline">
                 Jetzt registrieren
               </Link>
             </p>

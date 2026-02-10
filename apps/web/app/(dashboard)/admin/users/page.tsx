@@ -47,8 +47,8 @@ export default function UsersPage() {
   if (!isAdmin) {
     return (
       <div className="p-8">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700">Sie haben keine Berechtigung fuer diese Seite.</p>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-4">
+          <p className="text-rose-700">Sie haben keine Berechtigung fuer diese Seite.</p>
         </div>
       </div>
     );
@@ -57,21 +57,21 @@ export default function UsersPage() {
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-slate-900" />
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Benutzerverwaltung</h1>
-          <p className="mt-1 text-gray-600">Verwalten Sie Benutzer und Berechtigungen</p>
+          <h1 className="page-heading">Benutzerverwaltung</h1>
+          <p className="page-subheading">Verwalten Sie Benutzer und Berechtigungen</p>
         </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+          className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-white shadow-soft transition hover:bg-slate-800"
         >
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -81,18 +81,21 @@ export default function UsersPage() {
       </div>
 
       {notice && (
-        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4">
-          <p className="text-green-700">{notice}</p>
-          <button onClick={() => setNotice(null)} className="mt-1 text-sm text-green-700 underline">
+        <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4">
+          <p className="text-emerald-700">{notice}</p>
+          <button
+            onClick={() => setNotice(null)}
+            className="mt-1 text-sm text-emerald-700 underline"
+          >
             Schliessen
           </button>
         </div>
       )}
 
       {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700">{error}</p>
-          <button onClick={() => setError(null)} className="mt-1 text-sm text-red-600 underline">
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/90 p-4">
+          <p className="text-rose-700">{error}</p>
+          <button onClick={() => setError(null)} className="mt-1 text-sm text-rose-600 underline">
             Schliessen
           </button>
         </div>

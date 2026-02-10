@@ -26,7 +26,7 @@ export default function AnomaliesPage() {
   if (isLoading && anomalies.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600" />
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-slate-900" />
       </div>
     );
   }
@@ -34,14 +34,14 @@ export default function AnomaliesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Anomalien</h1>
-        <p className="mt-1 text-gray-500">Erkannte Kostenabweichungen pruefen und bearbeiten</p>
+        <h1 className="page-heading">Anomalien</h1>
+        <p className="page-subheading">Erkannte Kostenabweichungen pruefen und bearbeiten</p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-4">
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-sm text-rose-700">{error}</p>
             <Button variant="outline" size="sm" onClick={() => void fetchData()}>
               Erneut versuchen
             </Button>
