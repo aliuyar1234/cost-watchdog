@@ -187,9 +187,8 @@ describe('End-to-end pipeline (outbox + queues + workers)', () => {
       expect(extractedCostRecord).toBeTruthy();
 
       // 2) cost_record.created -> anomaly detection + aggregation jobs
-      await processOutbox();
-
       await waitFor(async () => {
+        await processOutbox();
         const anomalyCount = await prisma.anomaly.count({
           where: { costRecordId: extractedCostRecord!.id },
         });
@@ -197,9 +196,8 @@ describe('End-to-end pipeline (outbox + queues + workers)', () => {
       });
 
       // 3) anomaly.detected -> alert job
-      await processOutbox();
-
       await waitFor(async () => {
+        await processOutbox();
         const sent = await prisma.alert.count({ where: { status: 'sent' } });
         return sent > 0;
       });
