@@ -6,10 +6,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
 const composeFile = resolve(repoRoot, 'infrastructure', 'docker-compose.e2e.yml');
 
-const timestamp = new Date()
-  .toISOString()
-  .replaceAll(':', '-')
-  .replaceAll('.', '-');
+const timestamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
 const showcaseDir = resolve(repoRoot, 'showcase-screenshots', `showcase-${timestamp}`);
 
 const DEFAULT_DATABASE_URL =
@@ -173,10 +170,13 @@ async function main() {
     });
     await waitForHttpOk('http://localhost:3000/', 120000);
 
-    runPnpm(['--filter', '@cost-watchdog/web', 'exec', 'playwright', 'test', 'e2e/showcase.spec.js'], {
-      cwd: repoRoot,
-      env,
-    });
+    runPnpm(
+      ['--filter', '@cost-watchdog/web', 'exec', 'playwright', 'test', 'e2e/showcase.spec.js'],
+      {
+        cwd: repoRoot,
+        env,
+      },
+    );
 
     // eslint-disable-next-line no-console
     console.log(`Showcase screenshots saved to: ${env.SHOWCASE_OUTPUT_DIR}`);

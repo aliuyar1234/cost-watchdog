@@ -7,10 +7,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
 const composeFile = resolve(repoRoot, 'infrastructure', 'docker-compose.yml');
 
-const timestamp = new Date()
-  .toISOString()
-  .replaceAll(':', '-')
-  .replaceAll('.', '-');
+const timestamp = new Date().toISOString().replaceAll(':', '-').replaceAll('.', '-');
 
 const showcaseDir = resolve(repoRoot, 'showcase-screenshots', `demo-check-${timestamp}`);
 const reportPath = resolve(showcaseDir, 'demo-check-report.json');
@@ -234,7 +231,9 @@ async function runIngestPolicyChecks(apiBaseUrl, accessToken, csrf) {
   const csvUpload = await uploadFileWithBearer(apiBaseUrl, accessToken, csrf, {
     filename: 'demo-check.csv',
     blob: new Blob(
-      ['periodStart,periodEnd,amount,currency,costType,supplierName\n2026-01-01,2026-01-31,999.5,EUR,electricity,Demo Supplier\n'],
+      [
+        'periodStart,periodEnd,amount,currency,costType,supplierName\n2026-01-01,2026-01-31,999.5,EUR,electricity,Demo Supplier\n',
+      ],
       { type: 'text/csv' },
     ),
   });
@@ -248,11 +247,7 @@ async function runIngestPolicyChecks(apiBaseUrl, accessToken, csrf) {
   const xlsxUpload = await uploadFileWithBearer(apiBaseUrl, accessToken, csrf, {
     filename: 'blocked.xlsx',
     blob: new Blob(
-      [
-        new Uint8Array([
-          0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        ]),
-      ],
+      [new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])],
       { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
     ),
   });
@@ -355,7 +350,11 @@ async function main() {
     await waitForHttpOk(webUrl, 120000);
     report.steps.health = 'ok';
 
-    const accessToken = await loginAndGetAccessToken(apiBaseUrl, env.E2E_ADMIN_EMAIL, env.E2E_ADMIN_PASSWORD);
+    const accessToken = await loginAndGetAccessToken(
+      apiBaseUrl,
+      env.E2E_ADMIN_EMAIL,
+      env.E2E_ADMIN_PASSWORD,
+    );
     const csrf = await getCsrfContext(apiBaseUrl);
 
     const dashboardResponse = await fetch(`${apiBaseUrl}/analytics/dashboard`, {
