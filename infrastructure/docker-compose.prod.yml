@@ -23,7 +23,7 @@ services:
   # Traefik Reverse Proxy - TLS Termination & Routing
   # ===========================================================================
   traefik:
-    image: traefik:v3.0@sha256:9f437f8c6a9d0d2c2c2b4f1d1e3f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f
+    image: traefik:v3.0@sha256:a208c74fd80a566d4ea376053bff73d31616d7af3f1465a7747b8b89ee34d97e
     container_name: cost-watchdog-traefik
     restart: always
     read_only: true
@@ -150,6 +150,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      OPENAPI_DOCS_ENABLED: ${OPENAPI_DOCS_ENABLED:-false}
       # Non-sensitive config via environment
       S3_ENDPOINT: ${S3_ENDPOINT:?S3_ENDPOINT is required}
       S3_BUCKET: ${S3_BUCKET:?S3_BUCKET is required}
@@ -160,6 +161,7 @@ services:
       - ./secrets/db_url:/run/secrets/db_url:ro
       - ./secrets/redis_url:/run/secrets/redis_url:ro
       - ./secrets/auth_secret:/run/secrets/auth_secret:ro
+      - ./secrets/metrics_token:/run/secrets/metrics_token:ro
       - ./secrets/field_encryption_key:/run/secrets/field_encryption_key:ro
       - ./secrets/s3_access_key:/run/secrets/s3_access_key:ro
       - ./secrets/s3_secret_key:/run/secrets/s3_secret_key:ro
@@ -330,6 +332,7 @@ volumes:
 #    echo "postgresql://user:pass@host:5432/db" > ./secrets/db_url
 #    echo "redis://host:6379" > ./secrets/redis_url
 #    openssl rand -base64 32 > ./secrets/auth_secret
+#    openssl rand -hex 32 > ./secrets/metrics_token
 #    openssl rand -base64 32 > ./secrets/field_encryption_key
 #    echo "your-s3-access-key" > ./secrets/s3_access_key
 #    echo "your-s3-secret-key" > ./secrets/s3_secret_key

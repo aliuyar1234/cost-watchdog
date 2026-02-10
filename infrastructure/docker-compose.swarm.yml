@@ -46,6 +46,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      OPENAPI_DOCS_ENABLED: ${OPENAPI_DOCS_ENABLED:-false}
       # Non-sensitive config via environment
       S3_REGION: ${S3_REGION:-eu-central-1}
       WEB_URL: ${WEB_URL:?WEB_URL is required}
@@ -55,6 +56,7 @@ services:
       - db_url
       - redis_url
       - auth_secret
+      - metrics_token
       - field_encryption_key
       - s3_access_key
       - s3_secret_key
@@ -213,6 +215,8 @@ secrets:
     external: true
   auth_secret:
     external: true
+  metrics_token:
+    external: true
   field_encryption_key:
     external: true
   s3_access_key:
@@ -237,6 +241,7 @@ secrets:
 #    echo "postgresql://user:pass@host:5432/db" | docker secret create db_url -
 #    echo "redis://host:6379" | docker secret create redis_url -
 #    openssl rand -base64 32 | docker secret create auth_secret -
+#    openssl rand -hex 32 | docker secret create metrics_token -
 #    openssl rand -base64 32 | docker secret create field_encryption_key -
 #    echo "your-s3-access-key" | docker secret create s3_access_key -
 #    echo "your-s3-secret-key" | docker secret create s3_secret_key -

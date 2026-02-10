@@ -9,8 +9,8 @@
 # =============================================================================
 
 # Build stage
-# Pin to specific digest for reproducible builds (node:20-alpine as of 2026-01)
-FROM node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081d2f60fd7d5d430e9c AS builder
+# Pin to specific digest for reproducible builds (node:20-alpine as of 2026-02-10)
+FROM node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8 AS builder
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@8 --activate
@@ -42,7 +42,7 @@ RUN pnpm --filter @cost-watchdog/api... build
 RUN pnpm prune --prod
 
 # Production stage
-FROM node:20-alpine@sha256:3960ed74dfe320a67bf8da9555b6bade25ebda2b22b6081d2f60fd7d5d430e9c AS runner
+FROM node:20-alpine@sha256:09e2b3d9726018aecf269bd35325f46bf75046a643a66d28360ec71132750ec8 AS runner
 
 # Install tini for proper signal handling (PID 1 problem)
 # wget needed for healthcheck
