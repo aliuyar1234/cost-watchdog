@@ -33,7 +33,66 @@ More screenshots: `docs/showcase/`
 
 ## Architecture
 
-![Architecture](docs/watchdog-architecture.svg)
+```mermaid
+flowchart LR
+  subgraph Clients
+    WEB["Web UI (Next.js)"]
+    APIC["API Clients (CLI / Integrations)"]
+  end
+
+  subgraph Runtime["Cost Watchdog Runtime"]
+    API["API (Fastify)"]
+    OUTBOX["Transactional Outbox"]
+    POLLER["Outbox Poller"]
+    QUEUE["BullMQ Queues"]
+    EXTRACT["Extraction Worker"]
+    ANOM["Anomaly Worker"]
+    AGGR["Aggregation Worker"]
+    ALERT["Alerts Worker"]
+    MAINT["Maintenance Workers (Retention + Daily Digest)"]
+  end
+
+  subgraph Data["Data Stores"]
+    PG["PostgreSQL"]
+    REDIS["Redis"]
+    S3["S3 / MinIO"]
+  end
+
+  subgraph External["External Services"]
+    LLM["Anthropic (optional for PDF)"]
+    NOTIFY["Resend / Slack / Teams"]
+  end
+
+  WEB -->|"Auth + CSRF + API calls"| API
+  APIC --> API
+
+  API -->|"Upload metadata + state"| PG
+  API -->|"Store source files"| S3
+  API -->|"Write event in same tx"| OUTBOX
+
+  OUTBOX --> POLLER
+  POLLER -->|"Enqueue idempotent jobs"| QUEUE
+  QUEUE -->|"Redis-backed"| REDIS
+
+  QUEUE --> EXTRACT
+  QUEUE --> ANOM
+  QUEUE --> AGGR
+  QUEUE --> ALERT
+  QUEUE --> MAINT
+
+  EXTRACT -->|"CSV parse / PDF extraction"| PG
+  EXTRACT -->|"Read source docs"| S3
+  EXTRACT -.->|"PDF only"| LLM
+
+  ANOM -->|"Read history + upsert anomalies"| PG
+  AGGR -->|"Update monthly aggregates"| PG
+  ALERT -->|"Track delivery status"| PG
+  ALERT --> NOTIFY
+
+  API -->|"Read analytics + admin queries"| PG
+```
+
+Mermaid source: `docs/watchdog-architecture.mmd`
 
 See `docs/architecture.md` for runtime flow and worker topology.
 
