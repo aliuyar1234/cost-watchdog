@@ -76,3 +76,11 @@ docs/.specify/
 specs/
 CLAUDE.md
 infrastructure/docs/
+
+# Internal markdown docs
+AGENTS.md
+**/AGENTS.md
+TASKLIST.md
+SECURITY.md
+**/SECURITY.md
+CODE_OF_CONDUCT.md
