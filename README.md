@@ -14,11 +14,7 @@ It ingests cost data, runs automated anomaly checks, and delivers notifications 
 
 ![Login](docs/showcase/01-login.png)
 ![Dashboard](docs/showcase/02-dashboard.png)
-![Anomalies](docs/showcase/03-anomalies.png)
-![Documents](docs/showcase/04-documents.png)
-![Admin users](docs/showcase/05-admin-users.png)
-![Admin settings](docs/showcase/06-admin-settings.png)
-![Notifications](docs/showcase/07-notifications.png)
+More screenshots: `docs/showcase/`
 
 ## What you get
 
