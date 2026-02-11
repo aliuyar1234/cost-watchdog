@@ -221,15 +221,14 @@ Deployment examples:
 - `docs/data-model.md`
 - `docs/anomaly-engine.md`
 - `docs/tech-stack.md`
-- `docs/SECURITY.md`
 
 ## Security
 
-Please see `SECURITY.md` for reporting policy and `docs/SECURITY.md` for implemented controls.
+Security policies and implementation details are maintained in internal documentation.
 
 ## Contributing
 
-See `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
+See `CONTRIBUTING.md`.
 
 ## License
 
