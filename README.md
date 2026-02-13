@@ -8,8 +8,6 @@ Cost Watchdog is a self-hosted cost monitoring and anomaly detection platform.
 
 It ingests cost data, runs automated anomaly checks, and delivers notifications before overspend becomes visible in monthly or yearly reporting.
 
-> Status: preview (`v0.1.0`). APIs, UX, and data model are still evolving.
-
 ## Showcase
 
 ![Login](docs/showcase/01-login.png)
