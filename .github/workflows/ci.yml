@@ -72,7 +72,7 @@ jobs:
         # Fail on high and critical vulnerabilities
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@f781cce5aab226378ee181d764ab90ea0be3cdd8 # 0.25.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -81,7 +81,7 @@ jobs:
           format: 'table'
 
       - name: Run Trivy for SARIF report (all severities)
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@f781cce5aab226378ee181d764ab90ea0be3cdd8 # 0.25.0
         if: always()
         with:
           scan-type: 'fs'
@@ -283,7 +283,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan API image for vulnerabilities
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@f781cce5aab226378ee181d764ab90ea0be3cdd8 # 0.25.0
         with:
           image-ref: 'cost-watchdog-api:${{ github.sha }}'
           format: 'sarif'
@@ -291,7 +291,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Scan Web image for vulnerabilities
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
+        uses: aquasecurity/trivy-action@f781cce5aab226378ee181d764ab90ea0be3cdd8 # 0.25.0
         with:
           image-ref: 'cost-watchdog-web:${{ github.sha }}'
           format: 'sarif'
